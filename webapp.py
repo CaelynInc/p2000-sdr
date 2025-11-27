@@ -118,8 +118,8 @@ def index():
 
 @app.route("/api/latest")
 def api_latest():
-    messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 25")
-    app_logger.info("Live API requested (last 25 messages)")
+    messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 100")
+    app_logger.info("Live API requested (last 100 messages)")
     return jsonify([dict(m) for m in messages])
 
 @app.route("/message/<int:msg_id>")
