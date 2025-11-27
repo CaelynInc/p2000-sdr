@@ -7,13 +7,13 @@
         <div class="msg-text"><strong>{{ message.message }}</strong></div>
         <div class="timestamp">{{ message.timestamp }}</div>
 
-        <!-- New line showing service type -->
-        <div class="service-type" style="margin-top:6px; font-size:13px; color:var(--text);">
+        <!-- Service line -->
+        <div class="service-type" style="margin-top:6px; font-size:13px; color:var(--text, #000);">
             Service: {{ service_name }}
         </div>
 
-        <!-- Optionally, show capcodes here if needed -->
-        <div class="capcodes" style="margin-top:4px; font-size:12px; color:var(--timestamp);">
+        <!-- Capcodes (optional) -->
+        <div class="capcodes" style="margin-top:4px; font-size:12px; color:var(--timestamp, #666);">
             Capcodes: {{ message.capcodes }}
         </div>
     </div>

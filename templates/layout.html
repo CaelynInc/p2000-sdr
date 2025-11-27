@@ -2,146 +2,92 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Pi2000 Live{% endblock %}</title>
+    <title>Pi2000 Live</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <style>
-        /* -----------------------------
-           LIGHT MODE VARIABLES
-        ----------------------------- */
-        :root {
-            --bg: #f5f5f5;
-            --text: #111;
-            --card-bg: #ffffff;
-            --timestamp: #777;
+    /* Color variables for light/dark mode */
+    :root {
+        --bg: #f5f5f5;
+        --text: #222;
+        --timestamp: #555;
+        --card-bg: #fff;
+    }
+    :root.dark {
+        --bg: #121212;
+        --text: #eee;
+        --timestamp: #bbb;
+        --card-bg: #1e1e1e;
+    }
 
-            /* Severity colors (light mode) */
-            --sev-high-bg-light: #ffe5e5;
-            --sev-med-bg-light:  #fff0d9;
-            --sev-low-bg-light:  #ffffe0;
+    body {
+        margin:0;
+        font-family: Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+    }
 
-            --new-bg: #ffff99;
-        }
+    a { color: inherit; text-decoration: none; }
+    a:hover { text-decoration: underline; }
 
-        /* -----------------------------
-           DARK MODE VARIABLES (muted severity)
-        ----------------------------- */
-        :root.dark {
-            --bg: #181818;
-            --text: #e0e0e0;
-            --card-bg: #242424;
-            --timestamp: #aaa;
+    header {
+        display:flex;
+        justify-content: space-between;
+        align-items:center;
+        padding:10px 20px;
+        background-color: var(--card-bg);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: sticky;
+        top:0;
+        z-index: 100;
+    }
 
-            /* Muted, darker severity colors for dark mode */
-            --sev-high-bg-dark: #663333; /* darker red tint */
-            --sev-med-bg-dark:  #664c33; /* darker orange/yellow tint */
-            --sev-low-bg-dark:  #666633; /* darker yellow/cream tint */
+    .title { font-size: 20px; font-weight:bold; }
 
-            --new-bg: #504d00;
-        }
+    /* Dark/light toggle button */
+    #theme-toggle {
+        padding: 6px 12px;
+        border:none;
+        border-radius:4px;
+        cursor:pointer;
+        background-color:#888;
+        color:#fff;
+        font-size:14px;
+    }
 
-        /* -----------------------------
-           Severity color mapping
-        ----------------------------- */
-        .sev-high { background-color: var(--sev-high-bg-light); }
-        .sev-med  { background-color: var(--sev-med-bg-light); }
-        .sev-low  { background-color: var(--sev-low-bg-light); }
-        :root.dark .sev-high { background-color: var(--sev-high-bg-dark); }
-        :root.dark .sev-med  { background-color: var(--sev-med-bg-dark); }
-        :root.dark .sev-low  { background-color: var(--sev-low-bg-dark); }
+    #theme-toggle:hover { opacity:0.85; }
+    main { padding: 10px 20px; }
 
-        body, .msg-card {
-            transition: background-color 0.25s, color 0.25s;
-        }
-
-        body {
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 20px;
-            background-color: var(--card-bg);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        #themeToggle {
-            cursor: pointer;
-            background: none;
-            border: 1px solid var(--text);
-            border-radius: 12px;
-            padding: 4px 10px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            transition: all 0.25s;
-        }
-
-        #themeToggle span { margin-left: 6px; }
-
-        /* Legend styling */
-        #legend {
-            margin-bottom: 10px;
-            display: flex;
-            gap: 12px;
-            font-size: 13px;
-            justify-content: center;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .legend-color {
-            width: 18px;
-            height: 18px;
-            border-radius: 3px;
-            display: inline-block;
-            border: 1px solid #555;
-        }
+    /* Card base */
+    .msg-card { background-color: var(--card-bg); }
     </style>
-    {% block head %}{% endblock %}
 </head>
 <body>
+
 <header>
-    <div><h1>Pi2000 Live</h1></div>
-    <button id="themeToggle"><span>Toggle</span></button>
+    <div class="title">Pi2000 Live</div>
+    <button id="theme-toggle">Toggle Dark/Light</button>
 </header>
 
-<main style="padding: 10px 20px;">
+<main>
     {% block content %}{% endblock %}
 </main>
 
 <script>
-    const themeToggle = document.getElementById("themeToggle");
-    const root = document.documentElement;
-    let theme = localStorage.getItem("theme");
-    if (!theme) {
-        if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-            theme = "dark";
-        } else {
-            theme = "light";
-        }
-        localStorage.setItem("theme", theme);
-    }
-    if (theme === "dark") root.classList.add("dark");
+// Initialize theme
+function loadTheme() {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") document.documentElement.classList.add("dark");
+}
+loadTheme();
 
-    function updateButton() {
-        themeToggle.innerHTML = root.classList.contains("dark") ? '🌙<span>Dark</span>' : '☀️<span>Light</span>';
-    }
-    updateButton();
-
-    themeToggle.onclick = () => {
-        root.classList.toggle("dark");
-        localStorage.setItem("theme", root.classList.contains("dark") ? "dark" : "light");
-        updateButton();
-    };
+// Toggle dark/light mode
+document.getElementById("theme-toggle").addEventListener("click", () => {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+});
 </script>
 
-{% block scripts %}{% endblock %}
 </body>
 </html>

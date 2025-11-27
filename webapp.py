@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-import re
-from flask import Flask, render_template, g
-import sqlite3
-import time
-import logging
+from flask import Flask, render_template, g, jsonify
+import sqlite3, time, re, logging
 from logging.handlers import RotatingFileHandler
 
 DATABASE = "p2000.db"
@@ -66,6 +63,19 @@ def classify_service(msg):
     return "", "Unknown"
 
 # ---------------------------
+# Severity classification
+# ---------------------------
+def classify_severity(msg):
+    text = (msg["message"] or "").upper()
+    if re.search(r'\b(A1|PRIO\s*1|P\s*1|P1)\b', text):
+        return "sev-high"
+    elif re.search(r'\b(A2|PRIO\s*2|P\s*2|P2)\b', text):
+        return "sev-med"
+    elif re.search(r'\b(B1|B2|PRIO\s*3|P\s*3|P3)\b', text):
+        return "sev-low"
+    return ""
+
+# ---------------------------
 # Routes
 # ---------------------------
 @app.route("/")
@@ -89,15 +99,7 @@ def message_page(msg_id):
         return "Message not found", 404
 
     service_class, service_name = classify_service(msg)
-    text = (msg["message"] or "").upper()
-    if re.search(r'\b(A1|PRIO\s*1|P\s*1|P1)\b', text):
-        severity_class = "sev-high"
-    elif re.search(r'\b(A2|PRIO\s*2|P\s*2|P2)\b', text):
-        severity_class = "sev-med"
-    elif re.search(r'\b(B1|B2|PRIO\s*3|P\s*3|P3)\b', text):
-        severity_class = "sev-low"
-    else:
-        severity_class = ""
+    severity_class = classify_severity(msg)
 
     return render_template(
         "message.html",

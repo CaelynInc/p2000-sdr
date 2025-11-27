@@ -3,13 +3,6 @@
 
 <p style="text-align:center;">Total messages: {{ total }} | Render time: {{ elapsed|round(1) }} ms</p>
 
-<!-- Severity Legend -->
-<div id="legend" style="display:flex; justify-content:center; gap:12px; margin-bottom:10px; font-size:13px;">
-    <div class="legend-item"><span class="legend-color" id="legend-high"></span> High Priority</div>
-    <div class="legend-item"><span class="legend-color" id="legend-med"></span> Medium Priority</div>
-    <div class="legend-item"><span class="legend-color" id="legend-low"></span> Low Priority</div>
-</div>
-
 <!-- Filter buttons -->
 <div id="filters" style="display:flex; justify-content:center; gap:6px; margin-bottom:10px;">
     <button onclick="setFilter('all')" class="active">All</button>
@@ -22,9 +15,7 @@
 <div id="messages" style="display:flex; flex-direction:column; align-items:center;">Loading messages...</div>
 
 <style>
-/* --------------------------
-   Service color bars
---------------------------- */
+/* Service color bars */
 .msg-card.lfl { border-left: 5px solid #32CD32; }
 .msg-card.fdp { border-left: 5px solid #FF4500; }
 .msg-card.ems { border-left: 5px solid #FFD700; }
@@ -50,17 +41,27 @@
     line-height: 1.3;
 }
 
+/* Severity highlight classes */
+.sev-high { background-color: #ffcccc; }
+.sev-med { background-color: #fff0b3; }
+.sev-low { background-color: #e0ffe0; }
+
+/* Dark mode severity */
+:root.dark .sev-high { background-color: #992222; }
+:root.dark .sev-med { background-color: #997722; }
+:root.dark .sev-low { background-color: #227722; }
+
 /* New messages highlight */
 .msg-card.new {
     animation: fadeHighlight 1.2s ease-out;
 }
 @keyframes fadeHighlight {
-    from { background-color: var(--new-bg); }
+    from { background-color: var(--new-bg, #ddf); }
     to { background-color: inherit; }
 }
 
 .msg-text { margin-bottom: 3px; }
-.timestamp { font-size: 11px; color: var(--timestamp); }
+.timestamp { font-size: 11px; color: var(--timestamp, #666); }
 </style>
 
 <script>
@@ -83,26 +84,23 @@ function getSeverityClass(msg) {
     if (/\b(A1|PRIO\s*1|P\s*1|P1)\b/.test(t)) return "sev-high";
     if (/\b(A2|PRIO\s*2|P\s*2|P2)\b/.test(t)) return "sev-med";
     if (/\b(B1|B2|PRIO\s*3|P\s*3|P3)\b/.test(t)) return "sev-low";
-    return "sev-none";
+    return "";
 }
 
 function renderMessages(data) {
     const container = document.getElementById("messages");
-    let newIds = new Set();
     let html = "";
+    let newIds = new Set();
 
     data.forEach(m => {
-        const isNew = !currentIds.has(m.id);
         newIds.add(m.id);
-
-        const service = getServiceClass(m);
+        const isNew = !currentIds.has(m.id);
+        const cls = getServiceClass(m);
         const sev = getSeverityClass(m);
-
-        if (currentFilter !== "all" && service !== currentFilter) return;
+        if (currentFilter !== 'all' && cls !== currentFilter) return;
 
         html += `
-        <div class="msg-card ${service} ${sev}${isNew ? ' new' : ''}"
-             onclick="openMessage(${m.id})">
+        <div class="msg-card ${cls} ${sev}${isNew ? ' new' : ''}" onclick="openMessage(${m.id})">
             <div class="msg-text">${m.message}</div>
             <div class="timestamp">${m.timestamp}</div>
         </div>`;
@@ -128,28 +126,6 @@ async function loadLatest() {
 
 loadLatest();
 setInterval(loadLatest, 1000);
-
-/* Update legend colors correctly based on current theme */
-function updateLegendColors() {
-    const isDark = document.documentElement.classList.contains("dark");
-    const rootStyle = getComputedStyle(document.documentElement);
-
-    document.getElementById("legend-high").style.backgroundColor = 
-        isDark ? rootStyle.getPropertyValue('--sev-high-bg-dark') :
-                 rootStyle.getPropertyValue('--sev-high-bg-light');
-    document.getElementById("legend-med").style.backgroundColor = 
-        isDark ? rootStyle.getPropertyValue('--sev-med-bg-dark') :
-                 rootStyle.getPropertyValue('--sev-med-bg-light');
-    document.getElementById("legend-low").style.backgroundColor = 
-        isDark ? rootStyle.getPropertyValue('--sev-low-bg-dark') :
-                 rootStyle.getPropertyValue('--sev-low-bg-light');
-}
-
-/* Call legend update after page load and whenever theme toggles */
-updateLegendColors();
-document.getElementById("themeToggle").addEventListener("click", () => {
-    setTimeout(updateLegendColors, 50); // wait for class toggle to take effect
-});
 </script>
 
 {% endblock %}
