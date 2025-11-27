@@ -13,15 +13,16 @@
             --card-bg: #ffffff;
             --timestamp: #777;
 
-            --sev-high-bg: #ffe5e5;
-            --sev-med-bg:  #fff0d9;
-            --sev-low-bg:  #ffffe0;
+            /* Severity colors (light mode) */
+            --sev-high-bg-light: #ffe5e5;
+            --sev-med-bg-light:  #fff0d9;
+            --sev-low-bg-light:  #ffffe0;
 
             --new-bg: #ffff99;
         }
 
         /* -----------------------------
-           DARK MODE VARIABLES (vivid severity)
+           DARK MODE VARIABLES
         ----------------------------- */
         :root.dark {
             --bg: #181818;
@@ -29,13 +30,24 @@
             --card-bg: #242424;
             --timestamp: #aaa;
 
-            --sev-high-bg: #8B0000;  /* dark red */
-            --sev-med-bg:  #FF8C00;  /* dark orange */
-            --sev-low-bg:  #FFD700;  /* gold */
+            /* Currently same as light mode, can tweak separately later */
+            --sev-high-bg-dark: var(--sev-high-bg-light);
+            --sev-med-bg-dark:  var(--sev-med-bg-light);
+            --sev-low-bg-dark:  var(--sev-low-bg-light);
+
             --new-bg: #504d00;
         }
 
-        /* Smooth transitions */
+        /* -----------------------------
+           Severity color mapping
+        ----------------------------- */
+        .sev-high { background-color: var(--sev-high-bg-light); }
+        .sev-med  { background-color: var(--sev-med-bg-light); }
+        .sev-low  { background-color: var(--sev-low-bg-light); }
+        :root.dark .sev-high { background-color: var(--sev-high-bg-dark); }
+        :root.dark .sev-med  { background-color: var(--sev-med-bg-dark); }
+        :root.dark .sev-low  { background-color: var(--sev-low-bg-dark); }
+
         body, .msg-card {
             transition: background-color 0.25s, color 0.25s;
         }
@@ -69,9 +81,7 @@
             transition: all 0.25s;
         }
 
-        #themeToggle span {
-            margin-left: 6px;
-        }
+        #themeToggle span { margin-left: 6px; }
 
         /* Legend styling */
         #legend {
@@ -79,6 +89,7 @@
             display: flex;
             gap: 12px;
             font-size: 13px;
+            justify-content: center;
         }
         .legend-item {
             display: flex;
@@ -106,13 +117,8 @@
 </main>
 
 <script>
-    // -----------------------------
-    // THEME SYSTEM
-    // -----------------------------
     const themeToggle = document.getElementById("themeToggle");
     const root = document.documentElement;
-
-    // Detect system theme if not set
     let theme = localStorage.getItem("theme");
     if (!theme) {
         if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -122,13 +128,11 @@
         }
         localStorage.setItem("theme", theme);
     }
-
     if (theme === "dark") root.classList.add("dark");
 
     function updateButton() {
         themeToggle.innerHTML = root.classList.contains("dark") ? '🌙<span>Dark</span>' : '☀️<span>Light</span>';
     }
-
     updateButton();
 
     themeToggle.onclick = () => {

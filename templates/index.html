@@ -5,9 +5,9 @@
 
 <!-- Severity Legend -->
 <div id="legend" style="display:flex; justify-content:center; gap:12px; margin-bottom:10px; font-size:13px;">
-    <div class="legend-item"><span class="legend-color" style="background-color:#8B0000"></span> High Priority (A1 / P1)</div>
-    <div class="legend-item"><span class="legend-color" style="background-color:#FF8C00"></span> Medium Priority (A2 / P2)</div>
-    <div class="legend-item"><span class="legend-color" style="background-color:#FFD700"></span> Low Priority (B / PRIO3)</div>
+    <div class="legend-item"><span class="legend-color" style="background-color:#ffe5e5"></span> High Priority</div>
+    <div class="legend-item"><span class="legend-color" style="background-color:#fff0d9"></span> Medium Priority</div>
+    <div class="legend-item"><span class="legend-color" style="background-color:#ffffe0"></span> Low Priority</div>
 </div>
 
 <!-- Filter buttons -->
@@ -42,17 +42,10 @@
     line-height: 1.3;
 }
 
-/* Severity classes */
-.sev-high { background-color: var(--sev-high-bg); }
-.sev-med  { background-color: var(--sev-med-bg); }
-.sev-low  { background-color: var(--sev-low-bg); }
-.sev-none { background-color: var(--card-bg); }
-
 /* New messages highlight */
 .msg-card.new {
     animation: fadeHighlight 1.2s ease-out;
 }
-
 @keyframes fadeHighlight {
     from { background-color: var(--new-bg); }
     to { background-color: inherit; }
@@ -111,10 +104,7 @@ function renderMessages(data) {
     container.innerHTML = html;
 }
 
-function openMessage(id) {
-    window.location.href = "/message/" + id;
-}
-
+function openMessage(id) { window.location.href = "/message/" + id; }
 function setFilter(service) {
     currentFilter = service;
     document.querySelectorAll("#filters button").forEach(b => b.classList.remove("active"));
@@ -133,4 +123,3 @@ setInterval(loadLatest, 1000);
 </script>
 
 {% endblock %}
-
