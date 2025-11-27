@@ -11,26 +11,46 @@ P2000 is the ducth emergancy services messaging system for pagers. The system wo
 
 ## Installation
 
-The installation guid is for MacOS, but should be the same for any other  linux/unix system.
+The installation guide is for Linux.
 
-```bash
-# Installing requirements with homebrew. More info about homebrew
-# visitL https://brew.sh
-brew install rtl-sdr cmake pkg-config
+- Install the required libraries:
+```commandline
+sudo apt-get -y install cmake build-essential libusb-1.0 qt4-qmake libpulse-dev libx11-dev qt4-default
+```
+- Clone the rtl-sdr repo
+```commandline
+git clone https://github.com/osmocom/rtl-sdr.git
+```
 
-# downloading, building and installing multimon-ng FLEX decoder
-git clone https://github.com/Zanoroy/multimon-ng.git
-cd multimon-ng
-
+- Install the rtl-sdr package.
+```commandline
+cd rtl-sdr/
 mkdir build
 cd build
-cmake ..
+cmake ../ -DINSTALL_UDEV_RULES=ON
 make
 sudo make install
-cd
+sudo ldconfig
+```
 
+- Blacklist drivers  
+Some people are reporting problems with conflicting drivers, so you might want to do this as a precaution.  
+```commandline
+sudo nano /etc/modprobe.d/blacklist.conf
+```
+Add the following lines:
+```commandline
+blacklist dvb_usb_rtl28xxu
+blacklist rtl2832
+blacklist rtl2830
+```
+Now reboot for the changes to take effect:
+```commandline
+sudo reboot -h 0
+```
 # Installing p2000-sdr
-git clone https://github.com/hvanderlaan/p2000-sdr.git
+```commandline
+git clone https://github.com/CaelynInc/p2000-sdr.git
 cd p2000-sdr
 ```
 
