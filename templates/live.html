@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Live Feed (last 25 messages)</h2>
+<div id="messages">Loading…</div>
+
+<script>
+async function loadLatest() {
+    const r = await fetch("/api/latest");
+    const data = await r.json();
+
+    let html = "";
+    data.forEach(m => {
+        html += `
+        <div class="msg">
+            <div class="capcodes">${m.capcodes}</div>
+            <div>${m.message}</div>
+            <div class="timestamp">${m.timestamp}</div>
+        </div>`;
+    });
+
+    document.getElementById("messages").innerHTML = html;
+}
+
+loadLatest();
+setInterval(loadLatest, 1000);
+</script>
+
+{% endblock %}
