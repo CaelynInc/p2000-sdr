@@ -16,19 +16,11 @@
 <div id="messages">Loading messages...</div>
 
 <style>
-.msg.lfl { border-left: 5px solid #32CD32; }
-.msg.fdp { border-left: 5px solid #FF4500; }
-.msg.ems { border-left: 5px solid #FFD700; }
-.msg.pdp { border-left: 5px solid #1E90FF; }
-
-.msg { padding:10px; margin-bottom:5px; border-bottom:1px solid #ddd; }
-.msg.new { background-color: #ffff99; animation: fadeHighlight 2s ease-out; }
-@keyframes fadeHighlight { from { background-color: #ffff99; } to { background-color: white; } }
-
-.timestamp { font-size:12px; color:#666; }
-
-button { margin-right:5px; padding:5px 10px; cursor:pointer; }
-button.active { background-color:#0077cc; color:white; border:none; }
+/* Service color bars on cards */
+.msg-card.lfl { border-left: 5px solid #32CD32; }
+.msg-card.fdp { border-left: 5px solid #FF4500; }
+.msg-card.ems { border-left: 5px solid #FFD700; }
+.msg-card.pdp { border-left: 5px solid #1E90FF; }
 </style>
 
 <script>
@@ -49,7 +41,7 @@ function getServiceClass(msg) {
     return "";
 }
 
-// Render messages with filter
+// Render messages with filter and clickable links
 function renderMessages(data) {
     const container = document.getElementById("messages");
     let html = "";
@@ -61,7 +53,7 @@ function renderMessages(data) {
         const cls = getServiceClass(m);
         if (currentFilter !== 'all' && cls !== currentFilter) return;
         html += `
-        <div class="msg ${cls}${isNew ? ' new' : ''}" data-id="${m.id}">
+        <div class="msg-card ${cls}${isNew ? ' new' : ''}" data-id="${m.id}" onclick="openMessage(${m.id})">
             <strong>${m.message}</strong><br>
             <span class="timestamp">${m.timestamp}</span><br>
             Capcodes: ${m.capcodes}
@@ -70,6 +62,11 @@ function renderMessages(data) {
 
     container.innerHTML = html;
     currentIds = newIds;
+}
+
+// Open detailed message page
+function openMessage(id) {
+    window.location.href = "/message/" + id;
 }
 
 // Filter button handler
