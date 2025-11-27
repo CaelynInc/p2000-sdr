@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from flask import Flask, render_template, request
 import sqlite3
+import time
+
 
 DB_FILE = "p2000.db"
 
@@ -17,8 +19,18 @@ def query_db(query, args=(), one=False):
 
 @app.route("/")
 def index():
+    t0 = time.time()
+
     messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 50")
-    return render_template("index.html", messages=messages)
+    total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
+
+    render_time = time.time() - t0
+
+    return render_template("index.html",
+                           messages=messages,
+                           total=total,
+                           render_time=render_time)
+
 
 @app.route("/message/<int:msg_id>")
 def message_detail(msg_id):
@@ -27,9 +39,33 @@ def message_detail(msg_id):
 
 @app.route("/search")
 def search():
+    t0 = time.time()
     term = request.args.get("q", "").strip()
+
     if term == "":
-        return render_template("search.html", results=None, term="")
+        return render_template("search.html",
+                               results=None,
+                               term="",
+                               total=None,
+                               render_time=None)
+
+    results = query_db("""
+        SELECT * FROM p2000
+        WHERE message LIKE ? OR capcodes LIKE ?
+        ORDER BY id DESC
+        LIMIT 200
+    """, (f"%{term}%", f"%{term}%"))
+
+    total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
+
+    render_time = time.time() - t0
+
+    return render_template("search.html",
+                           results=results,
+                           term=term,
+                           total=total,
+                           render_time=render_time)
+
 
     results = query_db("""
         SELECT * FROM p2000 

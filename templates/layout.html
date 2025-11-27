@@ -15,6 +15,12 @@
 </head>
 <body>
 <div class="container">
+    {% if total is defined and render_time is defined %}
+<div style="color:#666; font-size:14px; margin-top:-10px; margin-bottom:10px;">
+    Total messages: <strong>{{ total }}</strong> |
+    Rendered in <strong>{{ '%.3f'|format(render_time) }}s</strong>
+</div>
+{% endif %}
     <h1>P2000 Viewer</h1>
     <div class="searchbox">
         <form action="/search">
