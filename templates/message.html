@@ -3,10 +3,16 @@
 
 <a href="/" style="text-decoration:none;color:var(--text);">&larr; Back to Live Messages</a>
 
-<div class="msg-card {{ service_class }} {{ severity_class }}" style="margin-top:20px; padding:16px;">
-    <div class="msg-text" style="font-size:16px; margin-bottom:8px;">{{ message.message }}</div>
-    <div class="timestamp" style="margin-bottom:6px;">{{ message.timestamp }}</div>
-    <div><strong>Capcodes:</strong> {{ message.capcodes }}</div>
+<div style="display:flex; justify-content:center; margin-top:20px;">
+    <div class="msg-card {{ service_class }} {{ severity_class }}" style="padding:16px;">
+        <div class="msg-text" style="font-size:16px; margin-bottom:8px;">{{ message.message }}</div>
+        <div class="timestamp" style="margin-bottom:6px;">{{ message.timestamp }}</div>
+        <div><strong>Capcodes:</strong> {{ message.capcodes }}</div>
+        <div style="margin-top:8px;">
+            <strong>Severity:</strong>
+            {% if severity_class == 'sev-high' %}High{% elif severity_class == 'sev-med' %}Medium{% elif severity_class == 'sev-low' %}Low{% else %}None{% endif %}
+        </div>
+    </div>
 </div>
 
 <style>

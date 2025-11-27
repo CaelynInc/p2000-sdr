@@ -1,17 +1,17 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<p>Total messages: {{ total }} | Render time: {{ elapsed|round(1) }} ms</p>
+<p style="text-align:center;">Total messages: {{ total }} | Render time: {{ elapsed|round(1) }} ms</p>
 
 <!-- Severity Legend -->
-<div id="legend">
+<div id="legend" style="display:flex; justify-content:center; gap:12px; margin-bottom:10px; font-size:13px;">
     <div class="legend-item"><span class="legend-color" style="background-color:#8B0000"></span> High Priority (A1 / P1)</div>
     <div class="legend-item"><span class="legend-color" style="background-color:#FF8C00"></span> Medium Priority (A2 / P2)</div>
     <div class="legend-item"><span class="legend-color" style="background-color:#FFD700"></span> Low Priority (B / PRIO3)</div>
 </div>
 
 <!-- Filter buttons -->
-<div id="filters" style="margin-bottom:10px;">
+<div id="filters" style="display:flex; justify-content:center; gap:6px; margin-bottom:10px;">
     <button onclick="setFilter('all')" class="active">All</button>
     <button onclick="setFilter('pdp')">Police</button>
     <button onclick="setFilter('fdp')">Fire</button>
@@ -19,7 +19,7 @@
     <button onclick="setFilter('lfl')">MMT/Traumaheli</button>
 </div>
 
-<div id="messages">Loading messages...</div>
+<div id="messages" style="display:flex; flex-direction:column; align-items:center;">Loading messages...</div>
 
 <style>
 /* Service color bars */
@@ -30,15 +30,16 @@
 
 /* Message cards */
 .msg-card {
-    background: var(--card-bg);
+    max-width: 700px;
+    width: 100%;
     border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    transition: background-color 0.25s, color 0.25s;
     padding: 8px 12px;
     margin-bottom: 8px;
     cursor: pointer;
     font-size: 14px;
     line-height: 1.3;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-    transition: background-color 0.25s, color 0.25s;
 }
 
 /* Severity classes */
