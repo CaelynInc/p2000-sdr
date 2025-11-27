@@ -1,9 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
-<div>
-    <strong>Total messages:</strong> {{ total }}<br>
-    <strong>Query time:</strong> {{ "%.2f" | format(elapsed) }} ms
-</div>
+
 <h2>Last 50 Messages</h2>
 
 {% for m in messages %}
