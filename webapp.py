@@ -38,7 +38,6 @@ def query_db(query, args=(), one=False):
 @app.route("/")
 def index():
     search = request.args.get("q", "").strip()
-
     start = time.time()
 
     if search:
@@ -52,8 +51,9 @@ def index():
         messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
 
     total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
-    elapsed = (time.time() - start) * 1000
+    elapsed = (time.time() - start) * 1000  # in milliseconds
 
+    # Pass total + elapsed to template
     return render_template(
         "index.html",
         messages=messages,
@@ -61,6 +61,7 @@ def index():
         elapsed=elapsed,
         search=search
     )
+
 
 
 # ---------------------------
@@ -79,7 +80,11 @@ def api_latest():
 # ---------------------------
 @app.route("/live")
 def live():
-    return render_template("live.html")
+    start = time.time()
+    total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
+    elapsed = (time.time() - start) * 1000
+    return render_template("live.html", total=total, elapsed=elapsed)
+
 
 
 # ---------------------------

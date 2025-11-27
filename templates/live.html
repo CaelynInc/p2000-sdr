@@ -1,6 +1,13 @@
 {% extends "layout.html" %}
 {% block content %}
 
+{% if total is defined and elapsed is defined %}
+<div>
+    <strong>Total messages:</strong> {{ total }} |
+    <strong>Render time:</strong> {{ "%.2f"|format(elapsed) }} ms
+</div>
+{% endif %}
+
 <h2>Live Feed (last 25 messages)</h2>
 <div id="messages">Loading…</div>
 
