@@ -68,4 +68,4 @@ def search():
 # Single message view
 @app.route("/message/<int:msg_id>")
 def message_view(msg_id):
-    m = query_db("SELECT * FROM p*_
+    m = query_db("SELECT * FROM p2000 WHERE id = ?", (msg_id,), one=True)
