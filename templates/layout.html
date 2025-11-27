@@ -6,28 +6,35 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f8f9fa;
+            background-color: #f4f6f8;
             color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
         }
 
         header {
-            margin-bottom: 20px;
+            text-align: center;
+            margin-bottom: 30px;
         }
 
         header h1 {
-            display: inline-block;
             margin: 0;
-            font-size: 24px;
+            font-size: 28px;
+            color: #0077cc;
         }
 
         nav {
-            display: inline-block;
-            margin-left: 20px;
+            margin-top: 10px;
         }
 
         nav a {
-            margin-right: 10px;
+            margin: 0 10px;
             text-decoration: none;
             color: #0077cc;
             font-weight: bold;
@@ -38,35 +45,82 @@
         }
 
         main {
-            margin-top: 10px;
+            margin-top: 20px;
         }
 
         footer {
+            text-align: center;
             margin-top: 40px;
             font-size: 12px;
             color: #666;
             border-top: 1px solid #ddd;
             padding-top: 10px;
         }
+
+        /* Card-style messages */
+        .msg-card {
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-left: 5px solid transparent;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Button styling */
+        button {
+            margin-right: 5px;
+            padding: 5px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #0077cc;
+            background-color: #fff;
+            color: #0077cc;
+            font-weight: bold;
+        }
+
+        button.active, button:hover {
+            background-color: #0077cc;
+            color: #fff;
+            border: none;
+        }
+
+        /* Highlight new messages */
+        .msg-card.new {
+            background-color: #ffff99;
+            animation: fadeHighlight 2s ease-out;
+        }
+
+        @keyframes fadeHighlight {
+            from { background-color: #ffff99; }
+            to { background-color: #fff; }
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body>
-    <header>
-        <h1>P2000 Live Feed</h1>
-        <nav>
-            <a href="/">Home</a>
-            <!-- You can add more links if needed -->
-        </nav>
-    </header>
+    <div class="container">
+        <header>
+            <h1>P2000 Live Feed</h1>
+            <nav>
+                <a href="/">Home</a>
+                <!-- future links -->
+            </nav>
+        </header>
 
-    <main>
-        {% block content %}{% endblock %}
-    </main>
+        <main>
+            {% block content %}{% endblock %}
+        </main>
 
-    <footer>
-        &copy; 2025 Your Name / P2000 Project
-    </footer>
+        <footer>
+            &copy; 2025 Your Name / P2000 Project
+        </footer>
+    </div>
 
     {% block scripts %}{% endblock %}
 </body>
