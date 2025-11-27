@@ -4,6 +4,7 @@ P2000 is the ducth emergency services messaging system for pagers. The system wo
 
 WIP:
 - Version with sqlite database
+- Webapp
 
 ## Requirements
 
