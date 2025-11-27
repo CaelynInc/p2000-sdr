@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>P2000 Viewer</title>
+    <style>
+        body { font-family: Arial; margin: 30px; background: #f5f5f5; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 8px; }
+        a { text-decoration: none; color: #0645ad; }
+        a:hover { text-decoration: underline; }
+        .msg { padding: 10px 0; border-bottom: 1px solid #ddd; }
+        .timestamp { color: #888; }
+        .searchbox input { width: 300px; padding: 8px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>P2000 Viewer</h1>
+    <div class="searchbox">
+        <form action="/search">
+            <input type="text" name="q" placeholder="Search capcode or text..." value="{{ term if term else '' }}">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+    <hr>
+    {% block content %}{% endblock %}
+</div>
+</body>
+</html>

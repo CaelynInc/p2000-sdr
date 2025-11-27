@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Last 50 Messages</h2>
+
+{% for m in messages %}
+<div class="msg">
+    <a href="/message/{{ m.id }}">
+        <strong>{{ m.message }}</strong>
+    </a><br>
+    <span class="timestamp">{{ m.timestamp }}</span><br>
+    Capcodes: {{ m.capcodes }}
+</div>
+{% endfor %}
+
+{% endblock %}
