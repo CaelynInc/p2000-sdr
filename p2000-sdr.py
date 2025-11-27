@@ -46,6 +46,7 @@ import time
 import re
 from subprocess import Popen, PIPE
 
+os.system('clear')
 
 def coloriz(capcode):
     """ colorizing text output according to capcode """
