@@ -2,6 +2,9 @@
 
 P2000 is the ducth emergency services messaging system for pagers. The system works on the 169,650 MHz FM band. These messages can be viewed with a FM receiver and the FLEX decoder. This script make use of an sdr dongle and a FLEX decoder to show the messages.
 
+WIP:
+- Version with sqlite database
+
 ## Requirements
 
     - RTL SDR Dongle (DBV-T, FM, DAB usb) based on a RTL chipset (820T2)
