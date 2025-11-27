@@ -6,6 +6,12 @@ from logging.handlers import RotatingFileHandler
 DATABASE = "p2000.db"
 app = Flask(__name__)
 
+# ---------------------------
+# Disable Flask's default request logging to console
+# ---------------------------
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.setLevel(logging.ERROR)
+
 # Logging
 log_file = "webapp.log"
 file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
