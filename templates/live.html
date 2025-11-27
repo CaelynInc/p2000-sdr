@@ -2,6 +2,15 @@
 {% block content %}
 
 <h2>Live Feed (last 25 messages)</h2>
+
+<div id="filters" style="margin-bottom:10px;">
+    <button onclick="setFilter('all')">All</button>
+    <button onclick="setFilter('pdp')">Police</button>
+    <button onclick="setFilter('fdp')">Fire</button>
+    <button onclick="setFilter('ems')">Ambulance</button>
+    <button onclick="setFilter('lfl')">MMT/Traumaheli</button>
+</div>
+
 <div id="messages">Loading…</div>
 
 <style>
@@ -28,12 +37,34 @@
     margin-bottom: 5px;
     border-bottom: 1px solid #ddd;
 }
+button {
+    margin-right:5px;
+    padding:5px 10px;
+    cursor:pointer;
+}
+button.active {
+    background-color:#0077cc;
+    color:white;
+    border:none;
+}
 </style>
 
 <script>
 let currentIds = new Set();
+let currentFilter = 'all';
 
-// JavaScript version of your Python coloriz() function
+function setFilter(service) {
+    currentFilter = service;
+    document.querySelectorAll('#filters button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    renderMessages(lastData);  // re-render with new filter
+}
+
+// Store last fetched data to re-render when filter changes
+let lastData = [];
+
 function getServiceClass(msg) {
     const cap = msg.capcodes || "";
     const text = msg.message || "";
@@ -41,26 +72,19 @@ function getServiceClass(msg) {
     const c = cap.toUpperCase();
     const t = text.toUpperCase();
 
-    // lfl: MMT / Traumaheli
     if (/000120901|000923993|001420059|MMT|TRAUMAHELI/.test(c) ||
         /MMT|TRAUMAHELI/.test(t)) return "lfl";
 
-    // fdp: Fire / Brandweer
     if (/00\d\d0\d{4}/.test(c) || /^[Pp]\s?[12]/.test(t) || /PRIO/.test(t)) return "fdp";
 
-    // ems: Ambulance / A1/A2
     if (/00\d\d2\d{4}/.test(c) || /^[AB][12]/.test(t)) return "ems";
 
-    // pdp: Police
     if (/00\d\d3\d{4}/.test(c) || /POLITIE/.test(t)) return "pdp";
 
     return "";
 }
 
-async function loadLatest() {
-    const r = await fetch("/api/latest");
-    const data = await r.json();
-
+function renderMessages(data) {
     let container = document.getElementById("messages");
     let html = "";
     let newIds = new Set();
@@ -69,6 +93,9 @@ async function loadLatest() {
         newIds.add(m.id);
         let isNew = !currentIds.has(m.id);
         let serviceClass = getServiceClass(m);
+
+        // Apply filter
+        if (currentFilter !== 'all' && serviceClass !== currentFilter) return;
 
         html += `
         <div class="msg ${serviceClass}${isNew ? ' new' : ''}" data-id="${m.id}">
@@ -80,6 +107,14 @@ async function loadLatest() {
 
     container.innerHTML = html;
     currentIds = newIds;
+}
+
+// Fetch and update messages
+async function loadLatest() {
+    const r = await fetch("/api/latest");
+    const data = await r.json();
+    lastData = data;   // store for re-render on filter change
+    renderMessages(data);
 }
 
 // Load immediately and refresh every second
