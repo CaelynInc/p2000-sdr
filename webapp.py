@@ -1,27 +1,41 @@
 #!/usr/bin/env python3
-from flask import Flask, render_template, g, jsonify
-import sqlite3, time, re, logging
+from flask import Flask, render_template, request, g, jsonify
+import sqlite3
+import time
+import logging
 from logging.handlers import RotatingFileHandler
+import re
 
 DATABASE = "p2000.db"
+
+# ---------------------------
+# Flask app
+# ---------------------------
 app = Flask(__name__)
 
-# Logging
+# ---------------------------
+# Logging configuration
+# ---------------------------
 log_file = "webapp.log"
 file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 file_handler.setFormatter(formatter)
+
 app_logger = logging.getLogger("p2000_webapp")
 app_logger.setLevel(logging.INFO)
 app_logger.addHandler(file_handler)
+
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.ERROR)
 console_handler.setFormatter(formatter)
 app_logger.addHandler(console_handler)
+
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 
-# Database
+# ---------------------------
+# Database helpers
+# ---------------------------
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DATABASE)
@@ -31,7 +45,7 @@ def get_db():
 @app.teardown_appcontext
 def close_db(exception):
     db = g.pop("db", None)
-    if db:
+    if db is not None:
         db.close()
 
 def query_db(query, args=(), one=False):
@@ -42,62 +56,89 @@ def query_db(query, args=(), one=False):
     cur.close()
     return (rows[0] if rows else None) if one else rows
 
-# Service and severity classification
+# ---------------------------
+# Classification helpers
+# ---------------------------
 def classify_service(msg):
-    text = (msg["message"] or "").upper()
-    caps = (msg["capcodes"] or "").upper()
-    if re.search(r'000120901|000923993|001420059|MMT|TRAUMAHELI', caps) or re.search(r'MMT|TRAUMAHELI', text):
-        return "lfl", "MMT / Traumaheli"
-    if re.search(r'00\d\d0\d{4}', caps) or re.search(r'PRIO', text):
+    text = msg["message"].upper()
+    cap = msg["capcodes"].upper()
+    if re.search(r"000120901|000923993|001420059|MMT|TRAUMAHELI", cap) or re.search(r"MMT|TRAUMAHELI", text):
+        return "lfl", "MMT/Traumaheli"
+    if re.search(r"00\d\d0\d{4}", cap) or "PRIO" in text:
         return "fdp", "Fire Department"
-    if re.search(r'00\d\d2\d{4}', caps) or re.match(r'^A[12]|^B[12]', text):
+    if re.search(r"00\d\d2\d{4}", cap) or re.match(r"^A[12]|^B[12]", text):
         return "ems", "Ambulance"
-    if re.search(r'00\d\d3\d{4}', caps) or re.search(r'POLITIE', text):
+    if re.search(r"00\d\d3\d{4}", cap) or "POLITIE" in text:
         return "pdp", "Police"
     return "", "Unknown"
 
 def classify_severity(msg):
-    text = (msg["message"] or "").upper()
-    if re.search(r'\b(A1|PRIO\s*1|P\s*1|P1)\b', text):
+    t = msg["message"].upper()
+    if re.search(r"\b(A1|PRIO\s*1|P\s*1|P1)\b", t):
         return "sev-high"
-    elif re.search(r'\b(A2|PRIO\s*2|P\s*2|P2)\b', text):
+    if re.search(r"\b(A2|PRIO\s*2|P\s*2|P2)\b", t):
         return "sev-med"
-    elif re.search(r'\b(B1|B2|PRIO\s*3|P\s*3|P3)\b', text):
+    if re.search(r"\b(B1|B2|PRIO\s*3|P\s*3|P3)\b", t):
         return "sev-low"
     return ""
 
+# ---------------------------
 # Routes
+# ---------------------------
 @app.route("/")
 def index():
     start = time.time()
     messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
     total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
     elapsed = (time.time() - start) * 1000
-    return render_template("index.html", messages=messages, total=total, elapsed=elapsed)
 
-@app.route("/api/latest")
-def api_latest():
-    messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 25")
-    app_logger.info("Live API requested (last 25 messages)")
-    return jsonify([dict(m) for m in messages])
+    # Generate dynamic legend
+    services_seen = set()
+    severities_seen = set()
+    for msg in messages:
+        svc_class, svc_name = classify_service(msg)
+        sev_class = classify_severity(msg)
+        if svc_class: services_seen.add((svc_class, svc_name))
+        if sev_class: severities_seen.add((sev_class, sev_class.replace("sev-", "").capitalize()))
+
+    services_seen = sorted(services_seen, key=lambda x: x[0])
+    severities_seen = sorted(severities_seen, key=lambda x: x[0])
+
+    return render_template(
+        "index.html",
+        messages=messages,
+        total=total,
+        elapsed=elapsed,
+        services_seen=services_seen,
+        severities_seen=severities_seen
+    )
 
 @app.route("/message/<int:msg_id>")
-def message_page(msg_id):
-    msg = query_db("SELECT * FROM p2000 WHERE id=?", (msg_id,), one=True)
-    if not msg:
+def message_detail(msg_id):
+    message = query_db("SELECT * FROM p2000 WHERE id=?", (msg_id,), one=True)
+    if not message:
         return "Message not found", 404
 
-    service_class, service_name = classify_service(msg)
-    severity_class = classify_severity(msg)
+    svc_class, svc_name = classify_service(message)
+    sev_class = classify_severity(message)
 
     return render_template(
         "message.html",
-        message=msg,
-        service_class=service_class,
-        service_name=service_name,
-        severity_class=severity_class
+        message=message,
+        service_class=svc_class,
+        service_name=svc_name,
+        severity_class=sev_class
     )
 
+@app.route("/api/latest")
+def api_latest():
+    messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
+    app_logger.info("Live API requested (last 200 messages)")
+    return jsonify([dict(m) for m in messages])
+
+# ---------------------------
+# Run server
+# ---------------------------
 if __name__ == "__main__":
     try:
         app_logger.info("Starting Flask webapp on 0.0.0.0:8080")
