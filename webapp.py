@@ -4,11 +4,14 @@ import sqlite3
 import time
 import logging
 from logging.handlers import RotatingFileHandler
+import re
 
 DATABASE = "p2000.db"
 app = Flask(__name__)
 
-# Logging
+# ---------------------------
+# Logging configuration
+# ---------------------------
 log_file = "webapp.log"
 file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
@@ -26,7 +29,9 @@ app_logger.addHandler(console_handler)
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 
+# ---------------------------
 # Database helpers
+# ---------------------------
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DATABASE)
@@ -47,32 +52,49 @@ def query_db(query, args=(), one=False):
     cur.close()
     return (rows[0] if rows else None) if one else rows
 
+# ---------------------------
+# Jinja2 custom filters
+# ---------------------------
+@app.template_filter('regex_search')
+def regex_search(value, pattern):
+    """Return True if regex pattern matches value"""
+    if value is None:
+        return False
+    return bool(re.search(pattern, value))
+
+# ---------------------------
 # Routes
+# ---------------------------
+
+# Home / Live page
 @app.route("/")
 def index():
     start = time.time()
     messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
     total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
-    elapsed = (time.time() - start) * 1000
+    elapsed = (time.time() - start) * 1000  # milliseconds
     app_logger.info("Home page requested")
     return render_template("index.html", messages=messages, total=total, elapsed=elapsed)
 
+# Single message detail
 @app.route("/message/<int:msg_id>")
 def view_message(msg_id):
-    """Show a single message by ID"""
     message = query_db("SELECT * FROM p2000 WHERE id = ?", (msg_id,), one=True)
     if not message:
         app_logger.warning(f"Message {msg_id} not found")
         return "Message not found", 404
     return render_template("message.html", message=message)
 
+# API for latest messages (live feed)
 @app.route("/api/latest")
 def api_latest():
     messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
     app_logger.info("API latest messages requested")
     return jsonify([dict(m) for m in messages])
 
+# ---------------------------
 # Run server
+# ---------------------------
 if __name__ == "__main__":
     try:
         app_logger.info("Starting Flask webapp on 0.0.0.0:8080")
