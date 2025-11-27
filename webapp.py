@@ -57,6 +57,15 @@ def index():
     app_logger.info("Home page requested")
     return render_template("index.html", messages=messages, total=total, elapsed=elapsed)
 
+@app.route("/message/<int:msg_id>")
+def view_message(msg_id):
+    """Show a single message by ID"""
+    message = query_db("SELECT * FROM p2000 WHERE id = ?", (msg_id,), one=True)
+    if not message:
+        app_logger.warning(f"Message {msg_id} not found")
+        return "Message not found", 404
+    return render_template("message.html", message=message)
+
 @app.route("/api/latest")
 def api_latest():
     messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
