@@ -3,22 +3,6 @@
 
 <p style="text-align:center;">Total messages: {{ total }} | Render time: {{ elapsed|round(1) }} ms</p>
 
-<!-- Legend -->
-<div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; font-size:13px;">
-    {% for svc_class, svc_name in services_seen %}
-        <div>
-            <span class="legend-svc {{ svc_class }}"></span>{{ svc_name }}
-        </div>
-    {% endfor %}
-
-    {% for sev_class, sev_label in severities_seen %}
-        <div>
-            <span class="legend-sev {{ sev_class }}"></span>{{ sev_label }} Severity
-        </div>
-    {% endfor %}
-</div>
-
-<!-- Filter buttons -->
 <div id="filters" style="display:flex; justify-content:center; gap:6px; margin-bottom:10px;">
     <button onclick="setFilter('all')" class="active">All</button>
     <button onclick="setFilter('pdp')">Police</button>
@@ -30,51 +14,30 @@
 <div id="messages" style="display:flex; flex-direction:column; align-items:center;">Loading messages...</div>
 
 <style>
-/* Cards */
 .msg-card { max-width:700px; width:100%; border-radius:6px; padding:8px 12px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,0.25); cursor:pointer; }
-.msg-card.lfl { border-left:5px solid #32CD32; }
-.msg-card.fdp { border-left:5px solid #FF4500; }
-.msg-card.ems { border-left:5px solid #FFD700; }
+.msg-card.lfl { border-left:5px solid #32CD32; } 
+.msg-card.fdp { border-left:5px solid #FF4500; } 
+.msg-card.ems { border-left:5px solid #FFD700; } 
 .msg-card.pdp { border-left:5px solid #1E90FF; }
 
-/* Dark mode service colors */
-:root.dark .msg-card.lfl { border-left-color:#228b22; }
-:root.dark .msg-card.fdp { border-left-color:#cc3300; }
-:root.dark .msg-card.ems { border-left-color:#cca300; }
+:root.dark .msg-card.lfl { border-left-color:#228b22; } 
+:root.dark .msg-card.fdp { border-left-color:#cc3300; } 
+:root.dark .msg-card.ems { border-left-color:#cca300; } 
 :root.dark .msg-card.pdp { border-left-color:#1c75ff; }
 
-/* Severity colors */
 .msg-card.sev-high { background-color: var(--sev-high); }
 .msg-card.sev-med { background-color: var(--sev-med); }
 .msg-card.sev-low { background-color: var(--sev-low); }
 
-/* New message highlight */
 .msg-card.new { animation: fadeHighlight 1.2s ease-out; }
 @keyframes fadeHighlight { from { background-color: #ddf; } to { background-color: inherit; } }
 
 .msg-text { margin-bottom:3px; }
 .timestamp { font-size:11px; color: var(--timestamp); }
-
-/* Legend styles */
-.legend-svc, .legend-sev { display:inline-block; width:14px; height:14px; margin-right:4px; vertical-align:middle; border-radius:2px; }
-.legend-svc.lfl { background-color:#32CD32; }
-:root.dark .legend-svc.lfl { background-color:#228b22; }
-.legend-svc.fdp { background-color:#FF4500; }
-:root.dark .legend-svc.fdp { background-color:#cc3300; }
-.legend-svc.ems { background-color:#FFD700; }
-:root.dark .legend-svc.ems { background-color:#cca300; }
-.legend-svc.pdp { background-color:#1E90FF; }
-:root.dark .legend-svc.pdp { background-color:#1c75ff; }
-
-/* Severity uses CSS variables */
-.legend-sev.sev-high { background-color: var(--sev-high); }
-.legend-sev.sev-med { background-color: var(--sev-med); }
-.legend-sev.sev-low { background-color: var(--sev-low); }
 </style>
 
 <script>
 let currentIds = new Set(), lastData = [], currentFilter='all';
-
 function getServiceClass(msg) {
     const c=(msg.capcodes||"").toUpperCase(), t=(msg.message||"").toUpperCase();
     if(/000120901|000923993|001420059|MMT|TRAUMAHELI/.test(c)||/MMT|TRAUMAHELI/.test(t)) return "lfl";
@@ -83,7 +46,6 @@ function getServiceClass(msg) {
     if(/00\d\d3\d{4}/.test(c)||/POLITIE/.test(t)) return "pdp";
     return "";
 }
-
 function getSeverityClass(msg){
     const t=(msg.message||"").toUpperCase();
     if(/\b(A1|PRIO\s*1|P\s*1|P1)\b/.test(t)) return "sev-high";
@@ -91,7 +53,6 @@ function getSeverityClass(msg){
     if(/\b(B1|B2|PRIO\s*3|P\s*3|P3)\b/.test(t)) return "sev-low";
     return "";
 }
-
 function renderMessages(data){
     const container=document.getElementById("messages");
     let html="", newIds=new Set();
@@ -100,29 +61,25 @@ function renderMessages(data){
         const isNew=!currentIds.has(m.id), cls=getServiceClass(m), sev=getSeverityClass(m);
         if(currentFilter!=='all' && cls!==currentFilter) return;
         html+=`<div class="msg-card ${cls} ${sev}${isNew?' new':''}" onclick="openMessage(${m.id})">
-            <div class="msg-text">${m.message}</div>
-            <div class="timestamp">${m.timestamp}</div>
+        <div class="msg-text">${m.message}</div>
+        <div class="timestamp">${m.timestamp}</div>
         </div>`;
     });
     currentIds=newIds;
     container.innerHTML=html;
 }
-
-function openMessage(id){ window.location.href="/message/"+id; }
-
+function openMessage(id){window.location.href="/message/"+id;}
 function setFilter(service){
     currentFilter=service;
     document.querySelectorAll("#filters button").forEach(b=>b.classList.remove("active"));
     event.target.classList.add("active");
     renderMessages(lastData);
 }
-
 async function loadLatest(){
     const r=await fetch("/api/latest");
     lastData=await r.json();
     renderMessages(lastData);
 }
-
 loadLatest(); setInterval(loadLatest,1000);
 </script>
 
