@@ -4,14 +4,17 @@
     are sended over the FM radio band. """
 
 # =========================================================================== #
-# File   : p2000-sdr.py                                                       #
-# Purpose: Display p2000 messages from the ether (FM band)                    #
+# File    : p2000-sdr.py                                                      #
+# Purpose : Display p2000 messages from the ether (FM band)                   #
 #                                                                             #
-# Author : Harald van der Laan                                                #
-# Date   : 2020-07-16                                                         #
-# Version: v1.0.2                                                             #
+# Author  : Harald van der Laan                                               #
+# Date    : 2020-07-16                                                        #
+# Edits by: @CaelynInc                                                        #
+# Date    : 27-11-2025                                                        #
+# Version : v1.0.3                                                            #
 # =========================================================================== #
 # Changelog:                                                                  #
+# - v1.0.3: Small fix for invalid escape message on start         (CaelynInc) #
 # - v1.0.2: Small display changes                       (Harald van der Laan) #
 # - v1.0.1: Fixed minor typos                           (Harald van der Laan) #
 # - v1.0.0: Initial version                             (Harald van der Laan) #
@@ -46,10 +49,10 @@ from subprocess import Popen, PIPE
 
 def coloriz(capcode):
     """ colorizing text output according to capcode """
-    lfl = '000120901|000923993|001420059|MMT|Traumaheli'
-    fdp = '00[0-9][0-9]0[0-9]{4}|^[Pp]\s?[12]|.*[Pp][Rr][Ii][Oo].*'
-    ems = '00[0-9][0-9]2[0-9]{4}|^A[12]|^B[12]'
-    pdp = '00[0-9][0-9]3[0-9]{4}|.*[Pp][Oo][Ll][Ii][Tt][Ii][Ee].*'
+    lfl = r'000120901|000923993|001420059|MMT|Traumaheli'
+    fdp = r'00[0-9][0-9]0[0-9]{4}|^[Pp]\s?[12]|.*[Pp][Rr][Ii][Oo].*'
+    ems = r'00[0-9][0-9]2[0-9]{4}|^A[12]|^B[12]'
+    pdp = r'00[0-9][0-9]3[0-9]{4}|.*[Pp][Oo][Ll][Ii][Tt][Ii][Ee].*'
 
     if re.match(lfl, capcode):
         color = '\033[92m'
