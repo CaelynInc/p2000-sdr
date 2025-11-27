@@ -89,7 +89,7 @@ def main():
                 if p2000.startswith('FLEX'):
                     message = p2000.strip().split('ALN|')[1]
                     capcodes = p2000[43:].split('|ALN|')[0].split()
-                    date = time.strftime('%Y/%m/%d %H:%M:%S')
+                    date = time.strftime('%d/%m/%Y %H:%M:%S')
 
                     print(f'\n\033[0mMelding van: {date}\a')
                     print(f'{coloriz(message)}{message}\033[0m')
