@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import Flask, render_template, request, g, jsonify
+from flask import Flask, render_template, g, jsonify
 import sqlite3
 import time
 import logging
@@ -64,45 +64,20 @@ def query_db(query, args=(), one=False):
 # ---------------------------
 @app.route("/")
 def index():
-    search = request.args.get("q", "").strip()
     start = time.time()
 
-    if search:
-        messages = query_db(
-            """SELECT * FROM p2000
-               WHERE message LIKE ? OR capcodes LIKE ?
-               ORDER BY id DESC""",
-            (f"%{search}%", f"%{search}%")
-        )
-        app_logger.info(f"Home page requested with search: '{search}'")
-    else:
-        messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
-        app_logger.info("Home page requested without search")
-
+    messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 200")
     total = query_db("SELECT COUNT(*) AS c FROM p2000", one=True)["c"]
     elapsed = (time.time() - start) * 1000  # milliseconds
+
+    app_logger.info("Home page requested")
 
     return render_template(
         "index.html",
         messages=messages,
         total=total,
-        elapsed=elapsed,
-        search=search
+        elapsed=elapsed
     )
-@app.route("/api/search")
-def api_search():
-    q = request.args.get("q", "").strip()
-    if not q:
-        return jsonify([])  # empty search returns nothing
-
-    messages = query_db(
-        """SELECT * FROM p2000
-           WHERE message LIKE ? OR capcodes LIKE ?
-           ORDER BY id DESC
-           LIMIT 200""",
-        (f"%{q}%", f"%{q}%")
-    )
-    return jsonify(messages)
 
 @app.route("/api/latest")
 def api_latest():
