@@ -1,24 +1,45 @@
 {% extends "layout.html" %}
 {% block content %}
-<h2>Search Results</h2>
 
-{% if results is none %}
-<p>Type something above to search.</p>
+<h2>Search Messages</h2>
 
-{% elif results|length == 0 %}
-<p>No results found for '<strong>{{ term }}</strong>'.</p>
+<form method="get" action="/search" style="margin-bottom:15px;">
+    <input type="text" name="q" placeholder="Search messages or capcodes…" value="{{ search }}" style="width:300px; padding:5px;">
+    <button type="submit" style="padding:5px 10px;">Search</button>
+</form>
 
+{% if messages %}
+<p>Found {{ messages|length }} messages for "{{ search }}":</p>
 {% else %}
-<p>{{ results|length }} results for '<strong>{{ term }}</strong>'</p>
+{% if search %}<p>No results found for "{{ search }}"</p>{% endif %}
+{% endif %}
 
-{% for m in results %}
-<div class="msg">
-    <a href="/message/{{ m.id }}"><strong>{{ m.message }}</strong></a><br>
+<style>
+.msg.lfl { border-left: 5px solid #32CD32; }   /* green, MMT / Traumaheli */
+.msg.fdp { border-left: 5px solid #FF4500; }   /* red, Fire / Brandweer */
+.msg.ems { border-left: 5px solid #FFD700; }   /* yellow, Ambulance */
+.msg.pdp { border-left: 5px solid #1E90FF; }   /* blue, Police */
+.msg { padding:10px; margin-bottom:5px; border-bottom:1px solid #ddd; }
+.timestamp { font-size:12px; color:#666; }
+</style>
+
+{% for m in messages %}
+{% set c = '' %}
+{% if m.capcodes %}
+    {% if m.capcodes|regex_search('000120901|000923993|001420059|MMT|Traumaheli') %}{% set c = 'lfl' %}
+    {% elif m.capcodes|regex_search('00[0-9][0-9]0[0-9]{4}') or m.capcodes|regex_search('^[Pp]\\s?[12]') or m.message|upper|regex_search('PRIO') %}{% set c = 'fdp' %}
+    {% elif m.capcodes|regex_search('00[0-9][0-9]2[0-9]{4}') or m.capcodes|regex_search('^[AB][12]') or m.message|upper|regex_search('^A[12]|^B[12]') %}{% set c = 'ems' %}
+    {% elif m.capcodes|regex_search('00[0-9][0-9]3[0-9]{4}') or m.message|upper|regex_search('POLITIE') %}{% set c = 'pdp' %}
+    {% endif %}
+{% endif %}
+
+<div class="msg {{ c }}">
+    <a href="/message/{{ m.id }}">
+        <strong>{{ m.message }}</strong>
+    </a><br>
     <span class="timestamp">{{ m.timestamp }}</span><br>
     Capcodes: {{ m.capcodes }}
 </div>
 {% endfor %}
-
-{% endif %}
 
 {% endblock %}
