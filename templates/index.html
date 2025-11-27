@@ -35,8 +35,8 @@
 }
 
 /* Severity shading */
-.sev-high { background-color: #ffe5e5; }      /* A1 / PRIO 1 */
-.sev-med  { background-color: #fff0d9; }      /* A2 / PRIO 2 */
+.sev-high { background-color: #ffe5e5; }      /* A1 / PRIO 1 / P1 / P 1 */
+.sev-med  { background-color: #fff0d9; }      /* A2 / PRIO 2 / P2 */
 .sev-low  { background-color: #ffffe0; }      /* B / Low prio */
 .sev-none { background-color: #ffffff; }
 
@@ -72,13 +72,19 @@ function getServiceClass(msg) {
     return "";
 }
 
-// Severity classifier
+// Severity classifier — updated to match "P 1" and variants
 function getSeverityClass(msg) {
     const t = (msg.message || "").toUpperCase();
 
-    if (/A1|PRIO ?1|P1\b/.test(t)) return "sev-high";
-    if (/A2|PRIO ?2|P2\b/.test(t)) return "sev-med";
-    if (/B1|B2|PRIO ?3|P3\b/.test(t)) return "sev-low";
+    // Match PRIO 1, PRIO1, P1, P 1, A1, etc.
+    if (/\b(A1|PRIO\s*1|P\s*1|P1)\b/.test(t)) return "sev-high";
+
+    // Match PRIO 2, PRIO2, P2, P 2, A2
+    if (/\b(A2|PRIO\s*2|P\s*2|P2)\b/.test(t)) return "sev-med";
+
+    // Match B1/B2 or PRIO 3 / P3
+    if (/\b(B1|B2|PRIO\s*3|P\s*3|P3)\b/.test(t)) return "sev-low";
+
     return "sev-none";
 }
 
