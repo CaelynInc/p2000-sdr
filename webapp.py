@@ -12,25 +12,32 @@ app = Flask(__name__)
 werkzeug_logger = logging.getLogger('werkzeug')
 werkzeug_logger.setLevel(logging.ERROR)
 
+# ---------------------------
 # Logging
+# ---------------------------
 log_file = "webapp.log"
 file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 file_handler.setFormatter(formatter)
+
 app_logger = logging.getLogger("p2000_webapp")
 app_logger.setLevel(logging.INFO)
 app_logger.addHandler(file_handler)
+
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.ERROR)
 console_handler.setFormatter(formatter)
 app_logger.addHandler(console_handler)
+
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 
-# Database
+# ---------------------------
+# Database helpers
+# ---------------------------
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DATABASE, timeout=5)  # <-- timeout ensures it waits if locked
+        g.db = sqlite3.connect(DATABASE, timeout=5)
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -42,36 +49,10 @@ def close_db(exception):
 
 def query_db(query, args=(), one=False):
     db = get_db()
-    app_logger.info(f"Executing DB query: {query} Args={args}")
     cur = db.execute(query, args)
     rows = cur.fetchall()
     cur.close()
     return (rows[0] if rows else None) if one else rows
-
-# ---------------------------
-# Cleanup function
-# ---------------------------
-def cleanup_db(max_rows=100000):
-    try:
-        db = get_db()
-        db.execute("""
-            DELETE FROM p2000
-            WHERE id NOT IN (
-                SELECT id FROM p2000 ORDER BY id DESC LIMIT ?
-            )
-        """, (max_rows,))
-        db.commit()
-        app_logger.info(f"Database cleanup completed, keeping last {max_rows} messages")
-    except sqlite3.OperationalError as e:
-        app_logger.error(f"Database cleanup failed: {e}")
-
-def cleanup_worker():
-    while True:
-        cleanup_db()
-        time.sleep(300)  # run every 5 minutes
-
-# Start cleanup thread
-threading.Thread(target=cleanup_worker, daemon=True).start()
 
 # ---------------------------
 # Service and severity classification
@@ -99,7 +80,34 @@ def classify_severity(msg):
         return "sev-low"
     return ""
 
+# ---------------------------
+# Periodic cleanup
+# ---------------------------
+def cleanup_db(max_rows=100000):
+    with app.app_context():
+        try:
+            db = get_db()
+            db.execute("""
+                DELETE FROM p2000
+                WHERE id NOT IN (
+                    SELECT id FROM p2000 ORDER BY id DESC LIMIT ?
+                )
+            """, (max_rows,))
+            db.commit()
+            app_logger.info(f"Database cleanup completed, keeping last {max_rows} messages")
+        except sqlite3.OperationalError as e:
+            app_logger.error(f"Database cleanup failed: {e}")
+
+def cleanup_worker():
+    while True:
+        cleanup_db()
+        time.sleep(300)  # every 5 minutes
+
+threading.Thread(target=cleanup_worker, daemon=True).start()
+
+# ---------------------------
 # Routes
+# ---------------------------
 @app.route("/")
 def index():
     start = time.time()
@@ -131,6 +139,9 @@ def message_page(msg_id):
         severity_class=severity_class
     )
 
+# ---------------------------
+# Run server
+# ---------------------------
 if __name__ == "__main__":
     try:
         app_logger.info("Starting Flask webapp on 0.0.0.0:8080")
