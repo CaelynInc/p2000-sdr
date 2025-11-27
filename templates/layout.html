@@ -2,126 +2,142 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>P2000 Live Feed</title>
+    <title>{% block title %}P2000 Live{% endblock %}</title>
     <style>
+        /* -----------------------------
+           LIGHT MODE VARIABLES
+        ----------------------------- */
+        :root {
+            --bg: #f5f5f5;
+            --text: #111;
+            --card-bg: #ffffff;
+            --timestamp: #777;
+
+            --sev-high-bg: #ffe5e5;
+            --sev-med-bg:  #fff0d9;
+            --sev-low-bg:  #ffffe0;
+
+            --new-bg: #ffff99;
+        }
+
+        /* -----------------------------
+           DARK MODE VARIABLES (vivid severity)
+        ----------------------------- */
+        :root.dark {
+            --bg: #181818;
+            --text: #e0e0e0;
+            --card-bg: #242424;
+            --timestamp: #aaa;
+
+            --sev-high-bg: #8B0000;  /* dark red */
+            --sev-med-bg:  #FF8C00;  /* dark orange */
+            --sev-low-bg:  #FFD700;  /* gold */
+            --new-bg: #504d00;
+        }
+
+        /* Smooth transitions */
+        body, .msg-card {
+            transition: background-color 0.25s, color 0.25s;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f6f8;
-            color: #333;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: sans-serif;
             margin: 0;
             padding: 0;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
         header {
-            text-align: center;
-            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: var(--card-bg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        header h1 {
-            margin: 0;
-            font-size: 28px;
-            color: #0077cc;
-        }
-
-        nav {
-            margin-top: 10px;
-        }
-
-        nav a {
-            margin: 0 10px;
-            text-decoration: none;
-            color: #0077cc;
-            font-weight: bold;
-        }
-
-        nav a:hover {
-            text-decoration: underline;
-        }
-
-        main {
-            margin-top: 20px;
-        }
-
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            font-size: 12px;
-            color: #666;
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
-        }
-
-        /* Card-style messages */
-        .msg-card {
-            background: #fff;
-            border-radius: 6px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            border-left: 5px solid transparent;
-        }
-
-        .timestamp {
-            font-size: 12px;
-            color: #666;
-        }
-
-        /* Button styling */
-        button {
-            margin-right: 5px;
-            padding: 5px 12px;
+        #themeToggle {
             cursor: pointer;
-            border-radius: 4px;
-            border: 1px solid #0077cc;
-            background-color: #fff;
-            color: #0077cc;
-            font-weight: bold;
+            background: none;
+            border: 1px solid var(--text);
+            border-radius: 12px;
+            padding: 4px 10px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            transition: all 0.25s;
         }
 
-        button.active, button:hover {
-            background-color: #0077cc;
-            color: #fff;
-            border: none;
+        #themeToggle span {
+            margin-left: 6px;
         }
 
-        /* Highlight new messages */
-        .msg-card.new {
-            background-color: #ffff99;
-            animation: fadeHighlight 2s ease-out;
+        /* Legend styling */
+        #legend {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 12px;
+            font-size: 13px;
         }
-
-        @keyframes fadeHighlight {
-            from { background-color: #ffff99; }
-            to { background-color: #fff; }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .legend-color {
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            display: inline-block;
+            border: 1px solid #555;
         }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Pi2000 Live Feed</h1>
-            <nav>
-                <a href="/">Home</a>
-                <!-- future links -->
-            </nav>
-        </header>
+<header>
+    <div><h1>P2000 Live</h1></div>
+    <button id="themeToggle"><span>Toggle</span></button>
+</header>
 
-        <main>
-            {% block content %}{% endblock %}
-        </main>
+<main style="padding: 10px 20px;">
+    {% block content %}{% endblock %}
+</main>
 
-        <footer>
-            &copy; 2025 CaelynInc / Pi2000 Project
-        </footer>
-    </div>
+<script>
+    // -----------------------------
+    // THEME SYSTEM
+    // -----------------------------
+    const themeToggle = document.getElementById("themeToggle");
+    const root = document.documentElement;
 
-    {% block scripts %}{% endblock %}
+    // Detect system theme if not set
+    let theme = localStorage.getItem("theme");
+    if (!theme) {
+        if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            theme = "dark";
+        } else {
+            theme = "light";
+        }
+        localStorage.setItem("theme", theme);
+    }
+
+    if (theme === "dark") root.classList.add("dark");
+
+    function updateButton() {
+        themeToggle.innerHTML = root.classList.contains("dark") ? '🌙<span>Dark</span>' : '☀️<span>Light</span>';
+    }
+
+    updateButton();
+
+    themeToggle.onclick = () => {
+        root.classList.toggle("dark");
+        localStorage.setItem("theme", root.classList.contains("dark") ? "dark" : "light");
+        updateButton();
+    };
+</script>
+
+{% block scripts %}{% endblock %}
 </body>
 </html>

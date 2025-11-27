@@ -1,8 +1,14 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<h2>Live Messages</h2>
 <p>Total messages: {{ total }} | Render time: {{ elapsed|round(1) }} ms</p>
+
+<!-- Severity Legend -->
+<div id="legend">
+    <div class="legend-item"><span class="legend-color" style="background-color:#8B0000"></span> High Priority (A1 / P1)</div>
+    <div class="legend-item"><span class="legend-color" style="background-color:#FF8C00"></span> Medium Priority (A2 / P2)</div>
+    <div class="legend-item"><span class="legend-color" style="background-color:#FFD700"></span> Low Priority (B / PRIO3)</div>
+</div>
 
 <!-- Filter buttons -->
 <div id="filters" style="margin-bottom:10px;">
@@ -22,36 +28,37 @@
 .msg-card.ems { border-left: 5px solid #FFD700; }
 .msg-card.pdp { border-left: 5px solid #1E90FF; }
 
-/* Base card style */
+/* Message cards */
 .msg-card {
+    background: var(--card-bg);
     border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     padding: 8px 12px;
     margin-bottom: 8px;
     cursor: pointer;
     font-size: 14px;
     line-height: 1.3;
-    transition: background-color 0.4s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    transition: background-color 0.25s, color 0.25s;
 }
 
-/* Severity shading */
-.sev-high { background-color: #ffe5e5; }      /* A1 / PRIO 1 / P1 / P 1 */
-.sev-med  { background-color: #fff0d9; }      /* A2 / PRIO 2 / P2 */
-.sev-low  { background-color: #ffffe0; }      /* B / Low prio */
-.sev-none { background-color: #ffffff; }
+/* Severity classes */
+.sev-high { background-color: var(--sev-high-bg); }
+.sev-med  { background-color: var(--sev-med-bg); }
+.sev-low  { background-color: var(--sev-low-bg); }
+.sev-none { background-color: var(--card-bg); }
 
-/* Highlight new messages */
+/* New messages highlight */
 .msg-card.new {
-    animation: fadeHighlight 1.4s ease-out;
+    animation: fadeHighlight 1.2s ease-out;
 }
 
 @keyframes fadeHighlight {
-    from { background-color: #ffff99; }
+    from { background-color: var(--new-bg); }
     to { background-color: inherit; }
 }
 
 .msg-text { margin-bottom: 3px; }
-.timestamp { font-size: 11px; color: #777; }
+.timestamp { font-size: 11px; color: var(--timestamp); }
 </style>
 
 <script>
@@ -59,12 +66,9 @@ let currentIds = new Set();
 let lastData = [];
 let currentFilter = 'all';
 
-// Determine service class
 function getServiceClass(msg) {
-    const cap = msg.capcodes || "";
-    const text = msg.message || "";
-    const c = cap.toUpperCase();
-    const t = text.toUpperCase();
+    const c = (msg.capcodes || "").toUpperCase();
+    const t = (msg.message || "").toUpperCase();
     if (/000120901|000923993|001420059|MMT|TRAUMAHELI/.test(c) || /MMT|TRAUMAHELI/.test(t)) return "lfl";
     if (/00\d\d0\d{4}/.test(c) || /PRIO/.test(t)) return "fdp";
     if (/00\d\d2\d{4}/.test(c) || /^A[12]|^B[12]/.test(t)) return "ems";
@@ -72,48 +76,38 @@ function getServiceClass(msg) {
     return "";
 }
 
-// Severity classifier — updated to match "P 1" and variants
 function getSeverityClass(msg) {
     const t = (msg.message || "").toUpperCase();
-
-    // Match PRIO 1, PRIO1, P1, P 1, A1, etc.
     if (/\b(A1|PRIO\s*1|P\s*1|P1)\b/.test(t)) return "sev-high";
-
-    // Match PRIO 2, PRIO2, P2, P 2, A2
     if (/\b(A2|PRIO\s*2|P\s*2|P2)\b/.test(t)) return "sev-med";
-
-    // Match B1/B2 or PRIO 3 / P3
     if (/\b(B1|B2|PRIO\s*3|P\s*3|P3)\b/.test(t)) return "sev-low";
-
     return "sev-none";
 }
 
-// Render message cards
 function renderMessages(data) {
     const container = document.getElementById("messages");
-    let html = "";
     let newIds = new Set();
+    let html = "";
 
     data.forEach(m => {
-        newIds.add(m.id);
         const isNew = !currentIds.has(m.id);
+        newIds.add(m.id);
 
-        const serviceClass = getServiceClass(m);
-        const severityClass = getSeverityClass(m);
+        const service = getServiceClass(m);
+        const sev = getSeverityClass(m);
 
-        if (currentFilter !== 'all' && serviceClass !== currentFilter)
-            return;
+        if (currentFilter !== "all" && service !== currentFilter) return;
 
         html += `
-        <div class="msg-card ${serviceClass} ${severityClass}${isNew ? ' new' : ''}"
+        <div class="msg-card ${service} ${sev}${isNew ? ' new' : ''}"
              onclick="openMessage(${m.id})">
             <div class="msg-text">${m.message}</div>
             <div class="timestamp">${m.timestamp}</div>
         </div>`;
     });
 
-    container.innerHTML = html;
     currentIds = newIds;
+    container.innerHTML = html;
 }
 
 function openMessage(id) {
@@ -122,16 +116,15 @@ function openMessage(id) {
 
 function setFilter(service) {
     currentFilter = service;
-    document.querySelectorAll('#filters button').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    document.querySelectorAll("#filters button").forEach(b => b.classList.remove("active"));
+    event.target.classList.add("active");
     renderMessages(lastData);
 }
 
 async function loadLatest() {
     const r = await fetch("/api/latest");
-    const data = await r.json();
-    lastData = data;
-    renderMessages(data);
+    lastData = await r.json();
+    renderMessages(lastData);
 }
 
 loadLatest();

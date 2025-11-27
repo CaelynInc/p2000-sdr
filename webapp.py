@@ -78,12 +78,42 @@ def index():
 
 # Single message detail
 @app.route("/message/<int:msg_id>")
-def view_message(msg_id):
-    message = query_db("SELECT * FROM p2000 WHERE id = ?", (msg_id,), one=True)
-    if not message:
-        app_logger.warning(f"Message {msg_id} not found")
+def message_detail(msg_id):
+    msg = query_db("SELECT * FROM p2000 WHERE id=?", (msg_id,), one=True)
+    if not msg:
         return "Message not found", 404
-    return render_template("message.html", message=message)
+
+    # Determine service class (matches JS logic)
+    text = msg["message"].upper()
+    cap = msg["capcodes"].upper()
+    if re.search(r'000120901|000923993|001420059|MMT|TRAUMAHELI', cap) or re.search(r'MMT|TRAUMAHELI', text):
+        service_class = "lfl"
+    elif re.search(r'00\d\d0\d{4}', cap) or "PRIO" in text:
+        service_class = "fdp"
+    elif re.search(r'00\d\d2\d{4}', cap) or re.match(r'^A[12]|^B[12]', text):
+        service_class = "ems"
+    elif re.search(r'00\d\d3\d{4}', cap) or "POLITIE" in text:
+        service_class = "pdp"
+    else:
+        service_class = ""
+
+    # Determine severity class
+    if re.search(r'\b(A1|PRIO\s*1|P\s*1|P1)\b', text):
+        severity_class = "sev-high"
+    elif re.search(r'\b(A2|PRIO\s*2|P\s*2|P2)\b', text):
+        severity_class = "sev-med"
+    elif re.search(r'\b(B1|B2|PRIO\s*3|P\s*3|P3)\b', text):
+        severity_class = "sev-low"
+    else:
+        severity_class = "sev-none"
+
+    return render_template(
+        "message.html",
+        message=msg,
+        service_class=service_class,
+        severity_class=severity_class
+    )
+
 
 # API for latest messages (live feed)
 @app.route("/api/latest")
