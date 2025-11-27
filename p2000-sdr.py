@@ -102,6 +102,8 @@ def main():
                             capdesc = 'Onbekende of persoonlijke capcode'
 
                         print(f'{coloriz(capcode)}[{capcode}]: {capdesc}')
+            else:
+                time.sleep(0.01)  # Add small sleep to prevent busy-waiting
 
     except KeyboardInterrupt:
         os.kill(sdr.pid, 9)
