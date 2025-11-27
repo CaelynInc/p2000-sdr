@@ -2,70 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pi2000 Live</title>
+    <title>P2000 Messages</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <style>
-    /* Color variables for light/dark mode */
     :root {
-        --bg: #f5f5f5;
-        --text: #222;
-        --timestamp: #555;
-        --card-bg: #fff;
+        --bg: #f5f5f5; --text: #222; --timestamp: #555; --card-bg: #fff;
+        --sev-high: #ffcccc; --sev-med: #fff0b3; --sev-low: #e0ffe0;
     }
     :root.dark {
-        --bg: #121212;
-        --text: #eee;
-        --timestamp: #bbb;
-        --card-bg: #1e1e1e;
+        --bg: #121212; --text: #eee; --timestamp: #bbb; --card-bg: #1e1e1e;
+        --sev-high: #661111; --sev-med: #665511; --sev-low: #116611;
     }
-
-    body {
-        margin:0;
-        font-family: Arial, sans-serif;
-        background-color: var(--bg);
-        color: var(--text);
-    }
-
+    body { margin:0; font-family: Arial, sans-serif; background-color: var(--bg); color: var(--text); }
     a { color: inherit; text-decoration: none; }
     a:hover { text-decoration: underline; }
-
-    header {
-        display:flex;
-        justify-content: space-between;
-        align-items:center;
-        padding:10px 20px;
-        background-color: var(--card-bg);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        position: sticky;
-        top:0;
-        z-index: 100;
-    }
-
+    header { display:flex; justify-content: space-between; align-items:center; padding:10px 20px; background-color: var(--card-bg); box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: sticky; top:0; z-index:100; }
     .title { font-size: 20px; font-weight:bold; }
-
-    /* Dark/light toggle button */
-    #theme-toggle {
-        padding: 6px 12px;
-        border:none;
-        border-radius:4px;
-        cursor:pointer;
-        background-color:#888;
-        color:#fff;
-        font-size:14px;
-    }
-
+    #theme-toggle { padding:6px 12px; border:none; border-radius:4px; cursor:pointer; background-color:#888; color:#fff; font-size:14px; }
     #theme-toggle:hover { opacity:0.85; }
     main { padding: 10px 20px; }
-
-    /* Card base */
-    .msg-card { background-color: var(--card-bg); }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="title">Pi2000 Live</div>
+    <div class="title">P2000 Messages</div>
     <button id="theme-toggle">Toggle Dark/Light</button>
 </header>
 
@@ -74,14 +36,11 @@
 </main>
 
 <script>
-// Initialize theme
 function loadTheme() {
     const saved = localStorage.getItem("theme");
     if (saved === "dark") document.documentElement.classList.add("dark");
 }
 loadTheme();
-
-// Toggle dark/light mode
 document.getElementById("theme-toggle").addEventListener("click", () => {
     document.documentElement.classList.toggle("dark");
     const isDark = document.documentElement.classList.contains("dark");

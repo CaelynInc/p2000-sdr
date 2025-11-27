@@ -6,9 +6,7 @@ from logging.handlers import RotatingFileHandler
 DATABASE = "p2000.db"
 app = Flask(__name__)
 
-# ---------------------------
-# Logging configuration
-# ---------------------------
+# Logging
 log_file = "webapp.log"
 file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
@@ -23,9 +21,7 @@ app_logger.addHandler(console_handler)
 app.logger.addHandler(file_handler)
 app.logger.setLevel(logging.INFO)
 
-# ---------------------------
-# Database helpers
-# ---------------------------
+# Database
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DATABASE)
@@ -46,9 +42,7 @@ def query_db(query, args=(), one=False):
     cur.close()
     return (rows[0] if rows else None) if one else rows
 
-# ---------------------------
-# Service classification
-# ---------------------------
+# Service and severity classification
 def classify_service(msg):
     text = (msg["message"] or "").upper()
     caps = (msg["capcodes"] or "").upper()
@@ -62,9 +56,6 @@ def classify_service(msg):
         return "pdp", "Police"
     return "", "Unknown"
 
-# ---------------------------
-# Severity classification
-# ---------------------------
 def classify_severity(msg):
     text = (msg["message"] or "").upper()
     if re.search(r'\b(A1|PRIO\s*1|P\s*1|P1)\b', text):
@@ -75,9 +66,7 @@ def classify_severity(msg):
         return "sev-low"
     return ""
 
-# ---------------------------
 # Routes
-# ---------------------------
 @app.route("/")
 def index():
     start = time.time()
@@ -109,9 +98,6 @@ def message_page(msg_id):
         severity_class=severity_class
     )
 
-# ---------------------------
-# Run server
-# ---------------------------
 if __name__ == "__main__":
     try:
         app_logger.info("Starting Flask webapp on 0.0.0.0:8080")

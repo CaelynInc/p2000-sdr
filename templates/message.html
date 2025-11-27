@@ -8,7 +8,6 @@
         <a href="/" style="font-size:14px; color:var(--text);">&larr; Back to Home</a>
     </div>
 
-    <!-- Message card -->
     <div class="msg-card {{ service_class }} {{ severity_class }}">
         <div class="msg-text"><strong>{{ message.message }}</strong></div>
         <div class="timestamp">{{ message.timestamp }}</div>
@@ -23,38 +22,21 @@
             Capcodes: {{ message.capcodes }}
         </div>
     </div>
-
 </div>
 
 <style>
-/* Keep left border colors matching the service like on home page */
-.msg-card.lfl { border-left: 5px solid #32CD32; }
-.msg-card.fdp { border-left: 5px solid #FF4500; }
-.msg-card.ems { border-left: 5px solid #FFD700; }
-.msg-card.pdp { border-left: 5px solid #1E90FF; }
-
-/* Dark mode service colors */
-:root.dark .msg-card.lfl { border-left-color: #228b22; }
-:root.dark .msg-card.fdp { border-left-color: #cc3300; }
-:root.dark .msg-card.ems { border-left-color: #cca300; }
-:root.dark .msg-card.pdp { border-left-color: #1c75ff; }
-
-/* Severity highlights */
-.sev-high { background-color: #ffcccc; }
-.sev-med { background-color: #fff0b3; }
-.sev-low { background-color: #e0ffe0; }
-
-:root.dark .sev-high { background-color: #992222; }
-:root.dark .sev-med { background-color: #997722; }
-:root.dark .sev-low { background-color: #227722; }
-
-.msg-card {
-    background-color: var(--card-bg);
-    border-radius: 6px;
-    padding: 10px 14px;
-    margin-bottom: 10px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-}
+.msg-card { border-radius:6px; padding:10px 14px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,0.25); background-color:var(--card-bg); }
+.msg-card.lfl { border-left:5px solid #32CD32; } 
+.msg-card.fdp { border-left:5px solid #FF4500; } 
+.msg-card.ems { border-left:5px solid #FFD700; } 
+.msg-card.pdp { border-left:5px solid #1E90FF; }
+:root.dark .msg-card.lfl { border-left-color:#228b22; } 
+:root.dark .msg-card.fdp { border-left-color:#cc3300; } 
+:root.dark .msg-card.ems { border-left-color:#cca300; } 
+:root.dark .msg-card.pdp { border-left-color:#1c75ff; }
+.msg-card.sev-high { background-color: var(--sev-high); }
+.msg-card.sev-med { background-color: var(--sev-med); }
+.msg-card.sev-low { background-color: var(--sev-low); }
 </style>
 
 {% endblock %}
