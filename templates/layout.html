@@ -22,7 +22,7 @@
         }
 
         /* -----------------------------
-           DARK MODE VARIABLES
+           DARK MODE VARIABLES (muted severity)
         ----------------------------- */
         :root.dark {
             --bg: #181818;
@@ -30,10 +30,10 @@
             --card-bg: #242424;
             --timestamp: #aaa;
 
-            /* Currently same as light mode, can tweak separately later */
-            --sev-high-bg-dark: var(--sev-high-bg-light);
-            --sev-med-bg-dark:  var(--sev-med-bg-light);
-            --sev-low-bg-dark:  var(--sev-low-bg-light);
+            /* Muted, darker severity colors for dark mode */
+            --sev-high-bg-dark: #663333; /* darker red tint */
+            --sev-med-bg-dark:  #664c33; /* darker orange/yellow tint */
+            --sev-low-bg-dark:  #666633; /* darker yellow/cream tint */
 
             --new-bg: #504d00;
         }
