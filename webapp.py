@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from flask import Flask, render_template, g, jsonify
-import sqlite3, time, re, logging, threading
+import sqlite3, time, re, logging, threading, requests
 from logging.handlers import RotatingFileHandler
 
 DATABASE = "p2000.db"
@@ -106,6 +106,30 @@ def cleanup_worker():
 threading.Thread(target=cleanup_worker, daemon=True).start()
 
 # ---------------------------
+# Address geocoding via OpenStreetMap Nominatim
+# ---------------------------
+def geocode_address(text):
+    """Return (lat, lon, display_name) if an address is detected, else (None, None, None)"""
+    # crude detection: look for numbers followed by street names (can refine later)
+    match = re.search(r'\d{1,5}\s\w+(?:\s\w+){0,3}', text)
+    if not match:
+        return None, None, None
+    addr = match.group(0)
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": addr, "format": "json", "limit": 1},
+            headers={"User-Agent": "p2000-webapp"}
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"]), data[0]["display_name"]
+    except Exception as e:
+        app_logger.error(f"Geocoding failed for '{addr}': {e}")
+    return None, None, None
+
+# ---------------------------
 # Routes
 # ---------------------------
 @app.route("/")
@@ -119,7 +143,6 @@ def index():
 @app.route("/api/latest")
 def api_latest():
     messages = query_db("SELECT * FROM p2000 ORDER BY id DESC LIMIT 100")
-#    app_logger.info("Live API requested (last 100 messages)")
     return jsonify([dict(m) for m in messages])
 
 @app.route("/message/<int:msg_id>")
@@ -131,12 +154,17 @@ def message_page(msg_id):
     service_class, service_name = classify_service(msg)
     severity_class = classify_severity(msg)
 
+    lat, lon, display_name = geocode_address(msg["message"])
+
     return render_template(
         "message.html",
         message=msg,
         service_class=service_class,
         service_name=service_name,
-        severity_class=severity_class
+        severity_class=severity_class,
+        lat=lat,
+        lon=lon,
+        address=display_name
     )
 
 # ---------------------------

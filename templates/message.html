@@ -22,6 +22,12 @@
             Capcodes: {{ message.capcodes }}
         </div>
     </div>
+
+    {% if address %}
+    <!-- Map -->
+    <div id="map" style="height:300px; margin-top:15px; border-radius:6px;"></div>
+    {% endif %}
+
 </div>
 
 <style>
@@ -38,5 +44,23 @@
 .msg-card.sev-med { background-color: var(--sev-med); }
 .msg-card.sev-low { background-color: var(--sev-low); }
 </style>
+
+{% if address %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const map = L.map('map').setView([{{ lat }}, {{ lon }}], 16);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    L.marker([{{ lat }}, {{ lon }}]).addTo(map)
+        .bindPopup("{{ address|escapejs }}")
+        .openPopup();
+});
+</script>
+{% endif %}
 
 {% endblock %}
