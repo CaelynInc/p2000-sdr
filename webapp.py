@@ -89,6 +89,20 @@ def index():
         elapsed=elapsed,
         search=search
     )
+@app.route("/api/search")
+def api_search():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])  # empty search returns nothing
+
+    messages = query_db(
+        """SELECT * FROM p2000
+           WHERE message LIKE ? OR capcodes LIKE ?
+           ORDER BY id DESC
+           LIMIT 200""",
+        (f"%{q}%", f"%{q}%")
+    )
+    return jsonify(messages)
 
 @app.route("/api/latest")
 def api_latest():
