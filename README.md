@@ -11,11 +11,11 @@ P2000 is the ducth emergancy services messaging system for pagers. The system wo
 
 ## Installation
 
-The installation guide is for Linux.
+The installation guide is for Linux on a Raspberry Pi 2 with RTL-SDR Blog v4.
 
 - Install the required libraries:
 ```commandline
-sudo apt-get -y install cmake build-essential libusb-1.0 qt4-qmake libpulse-dev libx11-dev qt4-default
+sudo apt-get -y install cmake build-essential libusb-1.0-0 libusb-1.0-0-dev libpulse-dev libx11-dev
 ```
 - Clone the rtl-sdr repo
 ```commandline
