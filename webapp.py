@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from flask import Flask, render_template, g, jsonify
-import sqlite3, time, re, logging
+import sqlite3, time, re, logging, threading
 from logging.handlers import RotatingFileHandler
 
 DATABASE = "p2000.db"
@@ -30,7 +30,7 @@ app.logger.setLevel(logging.INFO)
 # Database
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DATABASE)
+        g.db = sqlite3.connect(DATABASE, timeout=5)  # <-- timeout ensures it waits if locked
         g.db.row_factory = sqlite3.Row
     return g.db
 
@@ -48,7 +48,34 @@ def query_db(query, args=(), one=False):
     cur.close()
     return (rows[0] if rows else None) if one else rows
 
+# ---------------------------
+# Cleanup function
+# ---------------------------
+def cleanup_db(max_rows=100000):
+    try:
+        db = get_db()
+        db.execute("""
+            DELETE FROM p2000
+            WHERE id NOT IN (
+                SELECT id FROM p2000 ORDER BY id DESC LIMIT ?
+            )
+        """, (max_rows,))
+        db.commit()
+        app_logger.info(f"Database cleanup completed, keeping last {max_rows} messages")
+    except sqlite3.OperationalError as e:
+        app_logger.error(f"Database cleanup failed: {e}")
+
+def cleanup_worker():
+    while True:
+        cleanup_db()
+        time.sleep(300)  # run every 5 minutes
+
+# Start cleanup thread
+threading.Thread(target=cleanup_worker, daemon=True).start()
+
+# ---------------------------
 # Service and severity classification
+# ---------------------------
 def classify_service(msg):
     text = (msg["message"] or "").upper()
     caps = (msg["capcodes"] or "").upper()

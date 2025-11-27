@@ -29,8 +29,8 @@ def coloriz(capcode):
     return color
 
 def init_db():
-    """Create database + table if missing."""
-    conn = sqlite3.connect("p2000.db")
+    """Create database + table if missing, with timeout for safe concurrent access."""
+    conn = sqlite3.connect("p2000.db", timeout=5)  # wait up to 5 sec if locked
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS p2000 (
@@ -45,12 +45,23 @@ def init_db():
     return conn
 
 def store_message(conn: Connection, timestamp, capcodes, message, raw):
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO p2000 (timestamp, capcodes, message, raw) VALUES (?, ?, ?, ?)",
-        (timestamp, " ".join(capcodes), message, raw)
-    )
-    conn.commit()
+    retries = 3
+    for attempt in range(retries):
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO p2000 (timestamp, capcodes, message, raw) VALUES (?, ?, ?, ?)",
+                (timestamp, " ".join(capcodes), message, raw)
+            )
+            conn.commit()
+            return
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e):
+                print(f"Database is locked, retrying ({attempt+1}/{retries})...")
+                time.sleep(1)  # wait 1 sec and retry
+            else:
+                raise
+    print("Failed to insert message after retries.")
 
 def main():
     command = 'rtl_fm -f 169.65M -M fm -s 22050 -g 42 | multimon-ng -a FLEX -t raw -'
