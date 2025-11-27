@@ -22,11 +22,19 @@
 <div id="messages" style="display:flex; flex-direction:column; align-items:center;">Loading messages...</div>
 
 <style>
-/* Service color bars */
+/* --------------------------
+   Service color bars
+--------------------------- */
 .msg-card.lfl { border-left: 5px solid #32CD32; }
 .msg-card.fdp { border-left: 5px solid #FF4500; }
 .msg-card.ems { border-left: 5px solid #FFD700; }
 .msg-card.pdp { border-left: 5px solid #1E90FF; }
+
+/* Softer service borders in dark mode */
+:root.dark .msg-card.lfl { border-left-color: #228b22; }
+:root.dark .msg-card.fdp { border-left-color: #cc3300; }
+:root.dark .msg-card.ems { border-left-color: #cca300; }
+:root.dark .msg-card.pdp { border-left-color: #1c75ff; }
 
 /* Message cards */
 .msg-card {
@@ -34,7 +42,7 @@
     width: 100%;
     border-radius: 6px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-    transition: background-color 0.25s, color 0.25s;
+    transition: background-color 0.25s, color 0.25s, border-color 0.25s;
     padding: 8px 12px;
     margin-bottom: 8px;
     cursor: pointer;
@@ -121,23 +129,27 @@ async function loadLatest() {
 loadLatest();
 setInterval(loadLatest, 1000);
 
-/* Update legend colors dynamically based on dark/light mode */
+/* Update legend colors correctly based on current theme */
 function updateLegendColors() {
     const isDark = document.documentElement.classList.contains("dark");
+    const rootStyle = getComputedStyle(document.documentElement);
+
     document.getElementById("legend-high").style.backgroundColor = 
-        isDark ? getComputedStyle(document.documentElement).getPropertyValue('--sev-high-bg-dark') :
-                 getComputedStyle(document.documentElement).getPropertyValue('--sev-high-bg-light');
+        isDark ? rootStyle.getPropertyValue('--sev-high-bg-dark') :
+                 rootStyle.getPropertyValue('--sev-high-bg-light');
     document.getElementById("legend-med").style.backgroundColor = 
-        isDark ? getComputedStyle(document.documentElement).getPropertyValue('--sev-med-bg-dark') :
-                 getComputedStyle(document.documentElement).getPropertyValue('--sev-med-bg-light');
+        isDark ? rootStyle.getPropertyValue('--sev-med-bg-dark') :
+                 rootStyle.getPropertyValue('--sev-med-bg-light');
     document.getElementById("legend-low").style.backgroundColor = 
-        isDark ? getComputedStyle(document.documentElement).getPropertyValue('--sev-low-bg-dark') :
-                 getComputedStyle(document.documentElement).getPropertyValue('--sev-low-bg-light');
+        isDark ? rootStyle.getPropertyValue('--sev-low-bg-dark') :
+                 rootStyle.getPropertyValue('--sev-low-bg-light');
 }
 
+/* Call legend update after page load and whenever theme toggles */
 updateLegendColors();
-/* Also update legend colors whenever theme toggle is clicked */
-document.getElementById("themeToggle").addEventListener("click", updateLegendColors);
+document.getElementById("themeToggle").addEventListener("click", () => {
+    setTimeout(updateLegendColors, 50); // wait for class toggle to take effect
+});
 </script>
 
 {% endblock %}
