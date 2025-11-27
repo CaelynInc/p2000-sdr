@@ -5,9 +5,9 @@
 
 <!-- Severity Legend -->
 <div id="legend" style="display:flex; justify-content:center; gap:12px; margin-bottom:10px; font-size:13px;">
-    <div class="legend-item"><span class="legend-color" style="background-color:#ffe5e5"></span> High Priority</div>
-    <div class="legend-item"><span class="legend-color" style="background-color:#fff0d9"></span> Medium Priority</div>
-    <div class="legend-item"><span class="legend-color" style="background-color:#ffffe0"></span> Low Priority</div>
+    <div class="legend-item"><span class="legend-color" id="legend-high"></span> High Priority</div>
+    <div class="legend-item"><span class="legend-color" id="legend-med"></span> Medium Priority</div>
+    <div class="legend-item"><span class="legend-color" id="legend-low"></span> Low Priority</div>
 </div>
 
 <!-- Filter buttons -->
@@ -120,6 +120,24 @@ async function loadLatest() {
 
 loadLatest();
 setInterval(loadLatest, 1000);
+
+/* Update legend colors dynamically based on dark/light mode */
+function updateLegendColors() {
+    const isDark = document.documentElement.classList.contains("dark");
+    document.getElementById("legend-high").style.backgroundColor = 
+        isDark ? getComputedStyle(document.documentElement).getPropertyValue('--sev-high-bg-dark') :
+                 getComputedStyle(document.documentElement).getPropertyValue('--sev-high-bg-light');
+    document.getElementById("legend-med").style.backgroundColor = 
+        isDark ? getComputedStyle(document.documentElement).getPropertyValue('--sev-med-bg-dark') :
+                 getComputedStyle(document.documentElement).getPropertyValue('--sev-med-bg-light');
+    document.getElementById("legend-low").style.backgroundColor = 
+        isDark ? getComputedStyle(document.documentElement).getPropertyValue('--sev-low-bg-dark') :
+                 getComputedStyle(document.documentElement).getPropertyValue('--sev-low-bg-light');
+}
+
+updateLegendColors();
+/* Also update legend colors whenever theme toggle is clicked */
+document.getElementById("themeToggle").addEventListener("click", updateLegendColors);
 </script>
 
 {% endblock %}
