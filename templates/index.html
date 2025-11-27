@@ -1,32 +1,30 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<h2>Messages</h2>
+<h2>Live Messages</h2>
+<p>Total messages: {{ total }} | Render time: {{ elapsed|round(1) }} ms</p>
 
-<!-- Filters -->
+<!-- Filter buttons -->
 <div id="filters" style="margin-bottom:10px;">
-    <button onclick="setFilter('all')">All</button>
+    <button onclick="setFilter('all')" class="active">All</button>
     <button onclick="setFilter('pdp')">Police</button>
     <button onclick="setFilter('fdp')">Fire</button>
     <button onclick="setFilter('ems')">Ambulance</button>
     <button onclick="setFilter('lfl')">MMT/Traumaheli</button>
 </div>
 
-<!-- Search input -->
-<input type="text" id="searchBox" placeholder="Search messages or capcodes…" style="width:300px; padding:5px; margin-bottom:15px;">
-
-<div id="messages">Loading…</div>
+<div id="messages">Loading messages...</div>
 
 <style>
-.msg.new { background-color: #ffff99; animation: fadeHighlight 2s ease-out; }
-@keyframes fadeHighlight { from { background-color: #ffff99; } to { background-color: white; } }
-
 .msg.lfl { border-left: 5px solid #32CD32; }
 .msg.fdp { border-left: 5px solid #FF4500; }
 .msg.ems { border-left: 5px solid #FFD700; }
 .msg.pdp { border-left: 5px solid #1E90FF; }
 
 .msg { padding:10px; margin-bottom:5px; border-bottom:1px solid #ddd; }
+.msg.new { background-color: #ffff99; animation: fadeHighlight 2s ease-out; }
+@keyframes fadeHighlight { from { background-color: #ffff99; } to { background-color: white; } }
+
 .timestamp { font-size:12px; color:#666; }
 
 button { margin-right:5px; padding:5px 10px; cursor:pointer; }
@@ -38,39 +36,32 @@ let currentIds = new Set();
 let lastData = [];
 let currentFilter = 'all';
 
-// Colorize like Python coloriz()
+// Determine service class
 function getServiceClass(msg) {
     const cap = msg.capcodes || "";
     const text = msg.message || "";
     const c = cap.toUpperCase();
     const t = text.toUpperCase();
     if (/000120901|000923993|001420059|MMT|TRAUMAHELI/.test(c) || /MMT|TRAUMAHELI/.test(t)) return "lfl";
-    if (/00\d\d0\d{4}/.test(c) || /^[Pp]\s?[12]/.test(t) || /PRIO/.test(t)) return "fdp";
-    if (/00\d\d2\d{4}/.test(c) || /^[AB][12]/.test(t) || /^A[12]|^B[12]/.test(t)) return "ems";
+    if (/00\d\d0\d{4}/.test(c) || /PRIO/.test(t)) return "fdp";
+    if (/00\d\d2\d{4}/.test(c) || /^A[12]|^B[12]/.test(t)) return "ems";
     if (/00\d\d3\d{4}/.test(c) || /POLITIE/.test(t)) return "pdp";
     return "";
 }
 
-// Render messages with filter & search
-function renderMessages(data, searchText="") {
+// Render messages with filter
+function renderMessages(data) {
     const container = document.getElementById("messages");
     let html = "";
     let newIds = new Set();
-    const search = searchText.toUpperCase();
 
     data.forEach(m => {
         newIds.add(m.id);
         const isNew = !currentIds.has(m.id);
-        const serviceClass = getServiceClass(m);
-
-        // Apply service filter
-        if (currentFilter !== 'all' && serviceClass !== currentFilter) return;
-
-        // Apply search filter
-        if (search && !(m.message.toUpperCase().includes(search) || m.capcodes.toUpperCase().includes(search))) return;
-
+        const cls = getServiceClass(m);
+        if (currentFilter !== 'all' && cls !== currentFilter) return;
         html += `
-        <div class="msg ${serviceClass}${isNew ? ' new' : ''}" data-id="${m.id}">
+        <div class="msg ${cls}${isNew ? ' new' : ''}" data-id="${m.id}">
             <strong>${m.message}</strong><br>
             <span class="timestamp">${m.timestamp}</span><br>
             Capcodes: ${m.capcodes}
@@ -81,44 +72,23 @@ function renderMessages(data, searchText="") {
     currentIds = newIds;
 }
 
-// Live feed: fetch latest messages
+// Filter button handler
+function setFilter(service) {
+    currentFilter = service;
+    document.querySelectorAll('#filters button').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    renderMessages(lastData);
+}
+
+// Fetch latest messages
 async function loadLatest() {
-    if (document.getElementById("searchBox").value.trim() !== "") return; // skip live if searching
     const r = await fetch("/api/latest");
     const data = await r.json();
     lastData = data;
     renderMessages(data);
 }
 
-// Search database via API
-async function searchDatabase(query) {
-    const r = await fetch("/api/search?q=" + encodeURIComponent(query));
-    const data = await r.json();
-    lastData = data;
-    renderMessages(data, query);
-}
-
-// Filter buttons
-function setFilter(service) {
-    currentFilter = service;
-    document.querySelectorAll('#filters button').forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
-
-    const query = document.getElementById("searchBox").value.trim();
-    renderMessages(lastData, query);
-}
-
-// Search box live input
-document.getElementById("searchBox").addEventListener("input", (e) => {
-    const query = e.target.value.trim();
-    if (query === "") {
-        renderMessages(lastData); // show live feed
-    } else {
-        searchDatabase(query);    // fetch from full database
-    }
-});
-
-// Initial load and refresh every second
+// Initial load + refresh every second
 loadLatest();
 setInterval(loadLatest, 1000);
 </script>
