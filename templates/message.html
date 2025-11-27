@@ -1,44 +1,23 @@
 {% extends "layout.html" %}
 {% block content %}
 
-<a href="/" style="text-decoration:none;color:var(--text);">&larr; Back to Live Messages</a>
+<div style="max-width:700px; margin:auto;">
 
-<div style="display:flex; justify-content:center; margin-top:20px;">
-    <div class="msg-card {{ service_class }} {{ severity_class }}" style="padding:16px;">
-        <div class="msg-text" style="font-size:16px; margin-bottom:8px;">{{ message.message }}</div>
-        <div class="timestamp" style="margin-bottom:6px;">{{ message.timestamp }}</div>
-        <div><strong>Capcodes:</strong> {{ message.capcodes }}</div>
-        <div style="margin-top:8px;">
-            <strong>Severity:</strong>
-            {% if severity_class == 'sev-high' %}High{% elif severity_class == 'sev-med' %}Medium{% elif severity_class == 'sev-low' %}Low{% else %}None{% endif %}
+    <div class="msg-card {{ service_class }} {{ severity_class }}">
+        <div class="msg-text"><strong>{{ message.message }}</strong></div>
+        <div class="timestamp">{{ message.timestamp }}</div>
+
+        <!-- New line showing service type -->
+        <div class="service-type" style="margin-top:6px; font-size:13px; color:var(--text);">
+            Service: {{ service_name }}
+        </div>
+
+        <!-- Optionally, show capcodes here if needed -->
+        <div class="capcodes" style="margin-top:4px; font-size:12px; color:var(--timestamp);">
+            Capcodes: {{ message.capcodes }}
         </div>
     </div>
+
 </div>
-
-<style>
-/* Service color bars */
-.msg-card.lfl { border-left: 5px solid #32CD32; }
-.msg-card.fdp { border-left: 5px solid #FF4500; }
-.msg-card.ems { border-left: 5px solid #FFD700; }
-.msg-card.pdp { border-left: 5px solid #1E90FF; }
-
-/* Severity colors */
-.sev-high { background-color: var(--sev-high-bg-light); }
-.sev-med  { background-color: var(--sev-med-bg-light); }
-.sev-low  { background-color: var(--sev-low-bg-light); }
-:root.dark .sev-high { background-color: var(--sev-high-bg-dark); }
-:root.dark .sev-med  { background-color: var(--sev-med-bg-dark); }
-:root.dark .sev-low  { background-color: var(--sev-low-bg-dark); }
-
-.msg-card {
-    max-width: 700px;
-    width: 100%;
-    border-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-    transition: background-color 0.25s, color 0.25s;
-}
-.msg-text { font-weight: bold; }
-.timestamp { font-size: 12px; color: var(--timestamp); }
-</style>
 
 {% endblock %}
