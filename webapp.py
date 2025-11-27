@@ -106,30 +106,6 @@ def cleanup_worker():
 threading.Thread(target=cleanup_worker, daemon=True).start()
 
 # ---------------------------
-# Address geocoding via OpenStreetMap Nominatim
-# ---------------------------
-def geocode_address(text):
-    """Return (lat, lon, display_name) if an address is detected, else (None, None, None)"""
-    # crude detection: look for numbers followed by street names (can refine later)
-    match = re.search(r'\d{1,5}\s\w+(?:\s\w+){0,3}', text)
-    if not match:
-        return None, None, None
-    addr = match.group(0)
-    try:
-        r = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": addr, "format": "json", "limit": 1},
-            headers={"User-Agent": "p2000-webapp"}
-        )
-        r.raise_for_status()
-        data = r.json()
-        if data:
-            return float(data[0]["lat"]), float(data[0]["lon"]), data[0]["display_name"]
-    except Exception as e:
-        app_logger.error(f"Geocoding failed for '{addr}': {e}")
-    return None, None, None
-
-# ---------------------------
 # Routes
 # ---------------------------
 @app.route("/")
@@ -154,7 +130,31 @@ def message_page(msg_id):
     service_class, service_name = classify_service(msg)
     severity_class = classify_severity(msg)
 
-    lat, lon, display_name = geocode_address(msg["message"])
+    # ---------------------------
+    # Attempt to extract address and geocode
+    # ---------------------------
+    address = None
+    lat = lon = None
+    match = re.search(r'\b([A-Z][a-zA-Z\s]+ \d{1,4}[a-zA-Z]?)\b', msg["message"])
+    if match:
+        address_candidate = match.group(1)
+        try:
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": address_candidate, "format": "json", "limit": 1},
+                headers={"User-Agent": "p2000-webapp"}
+            )
+            data = resp.json()
+            if data:
+                address = data[0]["display_name"]
+                lat = data[0]["lat"]
+                lon = data[0]["lon"]
+            else:
+                address = f"No results for '{address_candidate}'"
+        except Exception as e:
+            address = f"Geocoding failed: {e}"
+    else:
+        address = "No address detected"
 
     return render_template(
         "message.html",
@@ -162,9 +162,9 @@ def message_page(msg_id):
         service_class=service_class,
         service_name=service_name,
         severity_class=severity_class,
+        address=address,
         lat=lat,
-        lon=lon,
-        address=display_name
+        lon=lon
     )
 
 # ---------------------------
