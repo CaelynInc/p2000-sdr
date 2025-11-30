@@ -65,7 +65,7 @@ def store_message(conn: Connection, timestamp, capcodes, message, raw):
 
 def main():
     command = 'rtl_fm -f 169.65M -M fm -s 22050 -g 42 | multimon-ng -a FLEX -t raw -'
-    sdr = Popen(command, stdout=PIPE, stderr=open('error.log', 'a'), shell=True)
+    sdr = Popen(command, stdout=PIPE, stderr=open('error.log', 'a'), shell=True) # error logging
     caplist = {}
 
     # Load capcodes list
@@ -88,10 +88,10 @@ def main():
                 except IndexError:
                     continue  # skip corrupted messages
 
-                capcodes = p2000[43:].split('|ALN|')[0].split()
+                capcodes = p2000[43:].split('|ALN|')[0].split() #remind Tyler
                 date = time.strftime('%d/%m/%Y %H:%M:%S')
 
-                # Print output (same as before)
+                # Print output (same as before)   ---- debugging only
                 print(f'\n\033[0mMelding van: {date}\a')
                 print(f'{coloriz(message)}{message}\033[0m')
 
@@ -102,9 +102,9 @@ def main():
                 # Store to SQLite
                 store_message(conn, date, capcodes, message, p2000.strip())
 
-    except KeyboardInterrupt:
+    except KeyboardInterrupt: #kill-command?
         os.kill(sdr.pid, 9)
         sys.exit(0)
 
-if __name__ == "__main__":
+if __name__ == "__main__": #research
     main()
