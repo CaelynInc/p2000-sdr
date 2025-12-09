@@ -30,10 +30,12 @@ def start_pipeline():
         "-g", "42"
     ]
 
+    # Add -q for quiet mode to suppress startup messages
     multi_cmd = [
         "multimon-ng",
         "-a", "FLEX",
         "-t", "raw",
+        "-q",
         "-"
     ]
 
@@ -96,6 +98,10 @@ def main():
     for line in decoder.stdout:
         line = line.strip()
         if not line:
+            continue
+
+        # Suppress multimon-ng startup message
+        if line.startswith("Enabled demodulators:"):
             continue
 
         # Example FLEX line:
