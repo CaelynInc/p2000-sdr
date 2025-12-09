@@ -10,6 +10,8 @@ from datetime import datetime
 SURREALDB_URL = "http://0.0.0.0:8000"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
+DB_NAMESPACE = "p2000"
+DB_NAME = "p2000"
 DB_PATH = "rocksdb:./p2000-db"
 TABLE_NAME = "messages"
 
@@ -47,7 +49,9 @@ def start_surrealdb():
 
 
 def setup_database():
+    # First select namespace and database, then create table and indexes
     queries = [
+        f"USE NS {DB_NAMESPACE} DB {DB_NAME};",
         f"CREATE TABLE {TABLE_NAME};",
         f"CREATE INDEX idx_time ON {TABLE_NAME} COLUMNS time;",
         f"CREATE INDEX idx_prio ON {TABLE_NAME} COLUMNS prio;",
@@ -65,7 +69,7 @@ def setup_database():
 def insert_message(msg):
     msg['received_at'] = datetime.utcnow().isoformat() + "Z"
 
-    # Deduplication
+    # Deduplication: skip if same raw message exists
     check_query = f"SELECT * FROM {TABLE_NAME} WHERE raw = {json.dumps(msg['raw'])};"
     resp = requests.post(f"{SURREALDB_URL}/sql", data=check_query, headers=HEADERS,
                          auth=(SURREALDB_USER, SURREALDB_PASS))
@@ -85,7 +89,7 @@ def consume_rabbitmq():
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
 
-    # Ensure queue is declared with TTL to match existing queue
+    # Declare queue with the correct TTL (matches existing queue)
     channel.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
     def callback(ch, method, properties, body):
