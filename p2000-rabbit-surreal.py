@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime, timezone
 
-import pika
+import aio_pika  # Async RabbitMQ client
 from surrealdb import Surreal
 
 # -------------------------------
@@ -35,10 +35,10 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # SurrealDB connection
 # -------------------------------
 async def connect_surreal():
-    """Connect to SurrealDB v2 HTTP server with async auth."""
-    db = Surreal(SURREALDB_URL)       # No auth in constructor
-    await db.connect()                 # Connect to server
-    await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})  # Authenticate
+    """Connect to SurrealDB v2 async HTTP server."""
+    db = Surreal(SURREALDB_URL, connection_type="async")
+    await db.connect()
+    await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
     await db.use(namespace=DB_NS, database=DB_NAME)
     return db
 
@@ -65,7 +65,6 @@ async def insert_message(db, msg):
     except Exception:
         pass
 
-    # Build document
     doc = {
         "raw": msg["raw"],
         "time": msg["time"],
@@ -81,32 +80,30 @@ async def insert_message(db, msg):
         print("Insert error:", e, doc)
 
 # -------------------------------
-# RabbitMQ consumer
+# Async RabbitMQ consumer
 # -------------------------------
-def consume(db):
-    params = pika.URLParameters(RABBITMQ_URL)
-    con = pika.BlockingConnection(params)
-    ch = con.channel()
-    ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
+async def consume(db):
+    connection = await aio_pika.connect_robust(RABBITMQ_URL)
+    async with connection:
+        channel = await connection.channel()
+        await channel.declare_queue(QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
+        queue = await channel.get_queue(QUEUE_NAME)
 
-    def cb(ch, method, props, body):
-        try:
-            msg = json.loads(body)  # Already JSON from producer
-            asyncio.run(insert_message(db, msg))
-        except Exception as e:
-            print("Parse/insert error:", e, body)
-        ch.basic_ack(method.delivery_tag)
-
-    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
-    print("Waiting for messages…")
-    ch.start_consuming()
+        async with queue.iterator() as queue_iter:
+            async for message in queue_iter:
+                async with message.process():
+                    try:
+                        msg = json.loads(message.body)
+                        await insert_message(db, msg)
+                    except Exception as e:
+                        print("Parse/insert error:", e, message.body)
 
 # -------------------------------
 # Main
 # -------------------------------
 async def main():
     db = await connect_surreal()
-    consume(db)
+    await consume(db)
 
 if __name__ == "__main__":
     asyncio.run(main())
