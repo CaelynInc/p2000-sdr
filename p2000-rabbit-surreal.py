@@ -36,8 +36,8 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # -------------------------------
 async def connect_surreal():
     """Connect to SurrealDB v2 async HTTP server."""
-    db = Surreal(SURREALDB_URL, connection_type="async")
-    await db.connect()
+    db = Surreal(SURREALDB_URL)      # <- just the URL
+    await db.connect()                # Connect to server
     await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
     await db.use(namespace=DB_NS, database=DB_NAME)
     return db
