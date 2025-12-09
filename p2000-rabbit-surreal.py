@@ -18,7 +18,7 @@ DB_NS = "p2000"
 DB_NAME = "p2000"
 TABLE = "messages"
 
-HEADERS = {"Content-Type": "text/plain"}
+HEADERS = {"Content-Type": "application/json"}
 
 # -------------------------------
 # RabbitMQ settings
@@ -60,7 +60,7 @@ def is_surrealdb_running():
 def start_surrealdb():
     print("Starting SurrealDB...")
     subprocess.Popen([
-        "surreal", "start", "rocksdb:p2000.db",
+        "surreal", "start", "rocksdb:pi2000-surreal.db",
         "--bind", "0.0.0.0:8000",
         "--user", SURREALDB_USER,
         "--pass", SURREALDB_PASS,
@@ -74,27 +74,34 @@ def start_surrealdb():
     raise RuntimeError("Failed to start SurrealDB")
 
 def surreal(query):
-    """Always send exactly one query, no semicolon."""
+    """Send a query string to SurrealDB via JSON POST."""
+    payload = json.dumps({"query": query})
     return requests.post(
         SURREALDB_URL,
         headers=HEADERS,
-        data=query,
+        data=payload,
         auth=(SURREALDB_USER, SURREALDB_PASS)
     )
 
 def setup_db():
+    # Check if table exists
+    r = surreal(f'USE NS {DB_NS}; USE DB {DB_NAME}; SHOW TABLES;')
+    tables = []
+    try:
+        tables = r.json()[0]["result"]
+    except Exception:
+        pass
+
     cmds = [
-        f"DEFINE NAMESPACE {DB_NS}",
-        f"DEFINE DATABASE {DB_NAME}",
+        f"DEFINE NAMESPACE {DB_NS} IF NOT EXISTS",
+        f"DEFINE DATABASE {DB_NAME} IF NOT EXISTS",
         f"USE NS {DB_NS}",
         f"USE DB {DB_NAME}",
-
-        f"DEFINE TABLE {TABLE} SCHEMALESS",
-
-        f"DEFINE INDEX idx_raw ON TABLE {TABLE} COLUMNS raw UNIQUE",
-        f"DEFINE INDEX idx_time ON TABLE {TABLE} COLUMNS time",
-        f"DEFINE INDEX idx_prio ON TABLE {TABLE} COLUMNS prio",
-        f"DEFINE INDEX idx_capcode ON TABLE {TABLE} COLUMNS capcode",
+        f"DEFINE TABLE {TABLE} SCHEMALESS IF NOT EXISTS",
+        f"DEFINE INDEX idx_raw ON TABLE {TABLE} COLUMNS raw UNIQUE IF NOT EXISTS",
+        f"DEFINE INDEX idx_time ON TABLE {TABLE} COLUMNS time IF NOT EXISTS",
+        f"DEFINE INDEX idx_prio ON TABLE {TABLE} COLUMNS prio IF NOT EXISTS",
+        f"DEFINE INDEX idx_capcode ON TABLE {TABLE} COLUMNS capcode IF NOT EXISTS",
     ]
 
     for c in cmds:
@@ -108,7 +115,7 @@ def setup_db():
 def insert_message(msg):
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
-    # Dedup—raw is UNIQUE so this is cheap
+    # Deduplication via raw
     check = surreal(f'USE NS {DB_NS}; USE DB {DB_NAME}; SELECT * FROM {TABLE} WHERE raw = "{msg["raw"]}"')
     try:
         if check.json()[0]["result"]:
@@ -118,7 +125,6 @@ def insert_message(msg):
         pass
 
     doc = json.dumps(msg)
-
     q = f"USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {doc}"
     r = surreal(q)
     if r.status_code >= 400:
