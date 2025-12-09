@@ -4,10 +4,10 @@ import time
 import json
 import pika
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 # SurrealDB settings
-SURREALDB_URL = "http://0.0.0.0:8000"
+SURREALDB_URL = "http://0.0.0.0:8000/sql"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
 DB_NAMESPACE = "p2000"
@@ -18,12 +18,12 @@ TABLE_NAME = "messages"
 # RabbitMQ settings
 RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
 QUEUE_NAME = "p2000"
-QUEUE_TTL = 300000  # 5 minutes in ms
+QUEUE_TTL = 300000  # 5 minutes
 
 
 def is_surrealdb_running():
     try:
-        r = requests.get(f"{SURREALDB_URL}/sql", auth=(SURREALDB_USER, SURREALDB_PASS))
+        r = requests.get(f"{SURREALDB_URL}?statements=[]", auth=(SURREALDB_USER, SURREALDB_PASS))
         return r.status_code in [200, 400]
     except requests.exceptions.ConnectionError:
         return False
@@ -47,39 +47,30 @@ def start_surrealdb():
 
 
 def setup_database():
-    headers = {"Content-Type": "application/surrealql"}
-    queries = [
+    statements = [
         f"USE NS {DB_NAMESPACE} DB {DB_NAME};",
-        f"CREATE TABLE {TABLE_NAME};",
-        f"CREATE INDEX idx_time ON {TABLE_NAME} COLUMNS time;",
-        f"CREATE INDEX idx_prio ON {TABLE_NAME} COLUMNS prio;",
-        f"CREATE INDEX idx_grip ON {TABLE_NAME} COLUMNS grip;",
-        f"CREATE INDEX idx_capcode ON {TABLE_NAME} COLUMNS capcode;",
-        f"CREATE INDEX idx_raw ON {TABLE_NAME} COLUMNS raw;"
+        f"CREATE TABLE IF NOT EXISTS {TABLE_NAME};",
+        f"CREATE INDEX IF NOT EXISTS idx_time ON {TABLE_NAME} COLUMNS time;",
+        f"CREATE INDEX IF NOT EXISTS idx_prio ON {TABLE_NAME} COLUMNS prio;",
+        f"CREATE INDEX IF NOT EXISTS idx_grip ON {TABLE_NAME} COLUMNS grip;",
+        f"CREATE INDEX IF NOT EXISTS idx_capcode ON {TABLE_NAME} COLUMNS capcode;",
+        f"CREATE INDEX IF NOT EXISTS idx_raw ON {TABLE_NAME} COLUMNS raw;"
     ]
-    for q in queries:
-        resp = requests.post(f"{SURREALDB_URL}/sql", headers=headers,
-                             auth=(SURREALDB_USER, SURREALDB_PASS), data=q)
-        if resp.status_code >= 400:
-            print(f"Warning: Could not execute query: {q}\nResponse: {resp.text}")
+    payload = {"statements": statements}
+    resp = requests.post(SURREALDB_URL, auth=(SURREALDB_USER, SURREALDB_PASS),
+                         headers={"Content-Type": "application/json"},
+                         data=json.dumps(payload))
+    if resp.status_code >= 400:
+        print(f"Warning: Could not setup database\nResponse: {resp.text}")
 
 
 def insert_message(msg):
-    msg['received_at'] = datetime.utcnow().isoformat() + "Z"
-    headers = {"Content-Type": "application/surrealql"}
-
-    # Deduplication: skip if same raw message exists
-    check_query = f"SELECT * FROM {TABLE_NAME} WHERE raw = {json.dumps(msg['raw'])};"
-    resp = requests.post(f"{SURREALDB_URL}/sql", headers=headers,
-                         auth=(SURREALDB_USER, SURREALDB_PASS), data=check_query)
-    if resp.status_code < 400 and resp.json() and resp.json()[0].get('result'):
-        print(f"[!] Duplicate message skipped: {msg['raw']}")
-        return
-
-    # Insert the message
-    insert_query = f"INSERT INTO {TABLE_NAME} CONTENT {json.dumps(msg)};"
-    resp = requests.post(f"{SURREALDB_URL}/sql", headers=headers,
-                         auth=(SURREALDB_USER, SURREALDB_PASS), data=insert_query)
+    msg['received_at'] = datetime.now(timezone.utc).isoformat()
+    statements = [f"INSERT INTO {TABLE_NAME} CONTENT {json.dumps(msg)};"]
+    payload = {"statements": statements}
+    resp = requests.post(SURREALDB_URL, auth=(SURREALDB_USER, SURREALDB_PASS),
+                         headers={"Content-Type": "application/json"},
+                         data=json.dumps(payload))
     if resp.status_code >= 400:
         print(f"Error inserting message: {resp.text}")
 
@@ -88,8 +79,6 @@ def consume_rabbitmq():
     params = pika.URLParameters(RABBITMQ_URL)
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
-
-    # Declare queue with TTL to match existing queue
     channel.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
     def callback(ch, method, properties, body):
