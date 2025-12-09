@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-import asyncio
 import json
 import re
+import time
 from datetime import datetime, timezone
+import threading
 
-import aio_pika
-from surrealdb import SurrealAsync  # <-- async client
+import pika
+from surrealdb import Surreal
 
 # -------------------------------
 # SurrealDB settings
@@ -34,17 +35,14 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # -------------------------------
 # SurrealDB connection
 # -------------------------------
-async def connect_surreal():
-    db = SurrealAsync(SURREALDB_URL)
-    await db.connect()  # Connect to server
-    await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
-    await db.use(namespace=DB_NS, database=DB_NAME)
-    return db
+db = Surreal(SURREALDB_URL)
+db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
+db.use(namespace=DB_NS, database=DB_NAME)
 
 # -------------------------------
 # Insert message
 # -------------------------------
-async def insert_message(db, msg):
+def insert_message(msg):
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
     if not msg.get("prio") and msg.get("message"):
@@ -56,7 +54,7 @@ async def insert_message(db, msg):
 
     # Deduplicate by raw
     try:
-        res = await db.select(TABLE, where={"raw": msg["raw"]})
+        res = db.select(TABLE, where={"raw": msg["raw"]})
         if res:
             print("Duplicate skipped:", msg["raw"])
             return
@@ -73,35 +71,33 @@ async def insert_message(db, msg):
     }
 
     try:
-        await db.insert(TABLE, doc)
+        db.insert(TABLE, doc)
     except Exception as e:
         print("Insert error:", e, doc)
 
 # -------------------------------
-# Async RabbitMQ consumer
+# RabbitMQ consumer
 # -------------------------------
-async def consume(db):
-    connection = await aio_pika.connect_robust(RABBITMQ_URL)
-    async with connection:
-        channel = await connection.channel()
-        await channel.declare_queue(QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
-        queue = await channel.get_queue(QUEUE_NAME)
+def consume():
+    params = pika.URLParameters(RABBITMQ_URL)
+    con = pika.BlockingConnection(params)
+    ch = con.channel()
+    ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
-        async with queue.iterator() as queue_iter:
-            async for message in queue_iter:
-                async with message.process():
-                    try:
-                        msg = json.loads(message.body)
-                        await insert_message(db, msg)
-                    except Exception as e:
-                        print("Parse/insert error:", e, message.body)
+    def cb(ch, method, props, body):
+        try:
+            msg = json.loads(body)
+            insert_message(msg)
+        except Exception as e:
+            print("Parse/insert error:", e, body)
+        ch.basic_ack(method.delivery_tag)
+
+    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
+    print("Waiting for messages…")
+    ch.start_consuming()
 
 # -------------------------------
 # Main
 # -------------------------------
-async def main():
-    db = await connect_surreal()
-    await consume(db)
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    consume()
