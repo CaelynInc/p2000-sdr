@@ -12,7 +12,7 @@ SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
 DB_NAME = "p2000"
 TABLE_NAME = "messages"
-DB_PATH = "./p2000-db"  # directory for on-disk storage
+DB_PATH = "rocksdb:./p2000-db"  # RocksDB on-disk storage
 
 # RabbitMQ settings
 RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
@@ -34,7 +34,7 @@ def start_surrealdb():
         "--user", SURREALDB_USER,
         "--pass", SURREALDB_PASS,
         "--bind", "0.0.0.0:8000",
-        DB_PATH  # directory for on-disk database
+        DB_PATH  # RocksDB on-disk storage
     ])
     for _ in range(10):
         if is_surrealdb_running():
