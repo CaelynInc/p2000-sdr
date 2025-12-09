@@ -13,6 +13,7 @@ from surrealdb import Surreal
 SURREALDB_URL = "http://0.0.0.0:8000/sql"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
+
 DB_NS = "p2000"
 DB_NAME = "p2000"
 TABLE = "messages"
@@ -31,17 +32,20 @@ PRIO_RE = re.compile(r"\b([AB]?1|[AB]?2|[AB]?3|PRIO ?[1235]|P ?[1235])\b", re.IG
 GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 
 # -------------------------------
-# SurrealDB helpers
+# SurrealDB connection
 # -------------------------------
 async def connect_surreal():
-    """Connect to SurrealDB v2 HTTP and select namespace/database."""
-    db = Surreal(SURREALDB_URL, auth=(SURREALDB_USER, SURREALDB_PASS))
+    """Connect to SurrealDB v2 HTTP server with async auth."""
+    db = Surreal(SURREALDB_URL)       # No auth in constructor
+    await db.connect()                 # Connect to server
+    await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})  # Authenticate
     await db.use(namespace=DB_NS, database=DB_NAME)
     return db
 
-
+# -------------------------------
+# Insert message
+# -------------------------------
 async def insert_message(db, msg):
-    """Insert a message into SurrealDB with deduplication, prio/grip parsing."""
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
     # Parse prio and grip if missing
@@ -53,10 +57,13 @@ async def insert_message(db, msg):
         msg["grip"] = int(m.group(1)) if m else None
 
     # Deduplicate by raw
-    check = await db.select(TABLE, where={"raw": msg["raw"]})
-    if check:
-        print("Duplicate skipped:", msg["raw"])
-        return
+    try:
+        res = await db.select(TABLE, where={"raw": msg["raw"]})
+        if res:  # Duplicate exists
+            print("Duplicate skipped:", msg["raw"])
+            return
+    except Exception:
+        pass
 
     # Build document
     doc = {
@@ -65,8 +72,7 @@ async def insert_message(db, msg):
         "prio": msg.get("prio"),
         "grip": msg.get("grip"),
         "capcode": msg.get("capcode", []),
-        "received_at": msg["received_at"],
-        "message": msg.get("message")
+        "received_at": msg["received_at"]
     }
 
     try:
@@ -75,25 +81,23 @@ async def insert_message(db, msg):
         print("Insert error:", e, doc)
 
 # -------------------------------
-# RabbitMQ consumer (blocking)
+# RabbitMQ consumer
 # -------------------------------
-def start_consumer(loop, db):
-    """Start RabbitMQ consumer in a thread-safe way."""
+def consume(db):
     params = pika.URLParameters(RABBITMQ_URL)
     con = pika.BlockingConnection(params)
     ch = con.channel()
     ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
-    def callback(ch, method, props, body):
+    def cb(ch, method, props, body):
         try:
-            msg = json.loads(body)
-            # Schedule insertion in the asyncio loop
-            asyncio.run_coroutine_threadsafe(insert_message(db, msg), loop)
+            msg = json.loads(body)  # Already JSON from producer
+            asyncio.run(insert_message(db, msg))
         except Exception as e:
             print("Parse/insert error:", e, body)
         ch.basic_ack(method.delivery_tag)
 
-    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
+    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
     print("Waiting for messages…")
     ch.start_consuming()
 
@@ -102,8 +106,7 @@ def start_consumer(loop, db):
 # -------------------------------
 async def main():
     db = await connect_surreal()
-    loop = asyncio.get_event_loop()
-    start_consumer(loop, db)
+    consume(db)
 
 if __name__ == "__main__":
     asyncio.run(main())
