@@ -6,7 +6,6 @@ import pika
 from datetime import datetime, timezone
 import re
 from surrealdb import Surreal
-from surrealdb.connections import BlockingWebSocketSurrealConnection
 
 # -------------------------------
 # SurrealDB settings
@@ -37,7 +36,7 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 def is_surrealdb_running():
     """Check if SurrealDB WebSocket server is up."""
     try:
-        db = Surreal(BlockingWebSocketSurrealConnection(SURREALDB_URL))
+        db = Surreal(SURREALDB_URL)
         db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
         db.use(namespace=DB_NS, database=DB_NAME)
         return True
@@ -65,7 +64,7 @@ def start_surrealdb():
 # -------------------------------
 def insert_message(msg):
     """Insert a P2000 message into SurrealDB, with deduplication."""
-    db = Surreal(BlockingWebSocketSurrealConnection(SURREALDB_URL))
+    db = Surreal(SURREALDB_URL)
     db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
     db.use(namespace=DB_NS, database=DB_NAME)
 
