@@ -70,7 +70,7 @@ def is_surrealdb_running():
 def start_surrealdb():
     print("Starting SurrealDB...")
     subprocess.Popen([
-        "surreal", "start", "./p2000-db",
+        "surreal", "start", "rocksdb:p2000-surreal.db",
         "--bind", "0.0.0.0:8000",  # allow external access
         "--user", SURREALDB_USER,
         "--pass", SURREALDB_PASS,
