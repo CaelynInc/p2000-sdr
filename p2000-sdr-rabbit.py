@@ -72,7 +72,12 @@ def connect_rabbit():
             )
 
             channel = connection.channel()
-            channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+            # Match the existing queue TTL to avoid PRECONDITION_FAILED
+            channel.queue_declare(
+                queue=RABBITMQ_QUEUE,
+                durable=True,
+                arguments={'x-message-ttl': 300000}  # 5 minutes in ms
+            )
 
             print("[+] Connected to RabbitMQ")
             return connection, channel
