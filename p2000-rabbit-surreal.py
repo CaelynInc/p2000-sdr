@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-import json
-import re
+import subprocess
 import time
-from datetime import datetime, timezone
-import threading
-
+import json
 import pika
+from datetime import datetime, timezone
+import re
 from surrealdb import Surreal
+from surrealdb.connections import BlockingWebSocketSurrealConnection
 
 # -------------------------------
 # SurrealDB settings
 # -------------------------------
-SURREALDB_URL = "http://127.0.0.1:8000/sql"
+SURREALDB_URL = "ws://127.0.0.1:8000"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
-
 DB_NS = "p2000"
 DB_NAME = "p2000"
 TABLE = "messages"
@@ -33,18 +32,46 @@ PRIO_RE = re.compile(r"\b([AB]?1|[AB]?2|[AB]?3|PRIO ?[1235]|P ?[1235])\b", re.IG
 GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 
 # -------------------------------
-# SurrealDB connection
+# SurrealDB helpers
 # -------------------------------
-db = Surreal(SURREALDB_URL)
-db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
-db.use(namespace=DB_NS, database=DB_NAME)
+def is_surrealdb_running():
+    """Check if SurrealDB WebSocket server is up."""
+    try:
+        db = Surreal(BlockingWebSocketSurrealConnection(SURREALDB_URL))
+        db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
+        db.use(namespace=DB_NS, database=DB_NAME)
+        return True
+    except Exception:
+        return False
+
+def start_surrealdb():
+    print("Starting SurrealDB...")
+    subprocess.Popen([
+        "surreal", "start", "rocksdb:./p2000-surreal.db",
+        "--bind", "0.0.0.0:8000",
+        "--user", SURREALDB_USER,
+        "--pass", SURREALDB_PASS,
+        "--log", "stdout"
+    ])
+    for _ in range(10):
+        if is_surrealdb_running():
+            print("SurrealDB is running.")
+            return
+        time.sleep(1)
+    raise RuntimeError("Failed to start SurrealDB")
 
 # -------------------------------
 # Insert message
 # -------------------------------
 def insert_message(msg):
+    """Insert a P2000 message into SurrealDB, with deduplication."""
+    db = Surreal(BlockingWebSocketSurrealConnection(SURREALDB_URL))
+    db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
+    db.use(namespace=DB_NS, database=DB_NAME)
+
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
+    # Parse prio and grip if missing
     if not msg.get("prio") and msg.get("message"):
         m = PRIO_RE.search(msg["message"])
         msg["prio"] = m.group(1).upper().replace(" ", "") if m else None
@@ -54,26 +81,29 @@ def insert_message(msg):
 
     # Deduplicate by raw
     try:
-        res = db.select(TABLE, where={"raw": msg["raw"]})
-        if res:
+        result = db.query(f'SELECT * FROM {TABLE} WHERE raw = $raw', {"raw": msg["raw"]})
+        if result and result[0]["result"]:
             print("Duplicate skipped:", msg["raw"])
             return
-    except Exception:
-        pass
+    except Exception as e:
+        print("Deduplication check error:", e)
 
+    # Build document
     doc = {
         "raw": msg["raw"],
         "time": msg["time"],
         "prio": msg.get("prio"),
         "grip": msg.get("grip"),
         "capcode": msg.get("capcode", []),
+        "message": msg.get("message"),
         "received_at": msg["received_at"]
     }
 
+    # Insert
     try:
         db.insert(TABLE, doc)
     except Exception as e:
-        print("Insert error:", e, doc)
+        print("Insert error:", e)
 
 # -------------------------------
 # RabbitMQ consumer
@@ -86,7 +116,7 @@ def consume():
 
     def cb(ch, method, props, body):
         try:
-            msg = json.loads(body)
+            msg = json.loads(body)  # Already JSON from your producer
             insert_message(msg)
         except Exception as e:
             print("Parse/insert error:", e, body)
@@ -100,4 +130,6 @@ def consume():
 # Main
 # -------------------------------
 if __name__ == "__main__":
+    if not is_surrealdb_running():
+        start_surrealdb()
     consume()
