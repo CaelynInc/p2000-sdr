@@ -20,8 +20,6 @@ RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
 QUEUE_NAME = "p2000"
 QUEUE_TTL = 300000  # 5 minutes in ms
 
-HEADERS = {"Content-Type": "application/surrealql"}
-
 
 def is_surrealdb_running():
     try:
@@ -49,7 +47,7 @@ def start_surrealdb():
 
 
 def setup_database():
-    # First select namespace and database, then create table and indexes
+    # List of queries to execute sequentially
     queries = [
         f"USE NS {DB_NAMESPACE} DB {DB_NAME};",
         f"CREATE TABLE {TABLE_NAME};",
@@ -60,8 +58,12 @@ def setup_database():
         f"CREATE INDEX idx_raw ON {TABLE_NAME} COLUMNS raw;"
     ]
     for q in queries:
-        resp = requests.post(f"{SURREALDB_URL}/sql", data=q, headers=HEADERS,
-                             auth=(SURREALDB_USER, SURREALDB_PASS))
+        # Send each query as a single-item JSON array
+        resp = requests.post(
+            f"{SURREALDB_URL}/sql",
+            json=[q],
+            auth=(SURREALDB_USER, SURREALDB_PASS)
+        )
         if resp.status_code >= 400:
             print(f"Warning: Could not execute query: {q}\nResponse: {resp.text}")
 
@@ -71,14 +73,14 @@ def insert_message(msg):
 
     # Deduplication: skip if same raw message exists
     check_query = f"SELECT * FROM {TABLE_NAME} WHERE raw = {json.dumps(msg['raw'])};"
-    resp = requests.post(f"{SURREALDB_URL}/sql", data=check_query, headers=HEADERS,
+    resp = requests.post(f"{SURREALDB_URL}/sql", json=[check_query],
                          auth=(SURREALDB_USER, SURREALDB_PASS))
     if resp.status_code < 400 and resp.json() and resp.json()[0].get('result'):
         print(f"[!] Duplicate message skipped: {msg['raw']}")
         return
 
     insert_query = f"INSERT INTO {TABLE_NAME} CONTENT {json.dumps(msg)};"
-    resp = requests.post(f"{SURREALDB_URL}/sql", data=insert_query, headers=HEADERS,
+    resp = requests.post(f"{SURREALDB_URL}/sql", json=[insert_query],
                          auth=(SURREALDB_USER, SURREALDB_PASS))
     if resp.status_code >= 400:
         print(f"Error inserting message: {resp.text}")
@@ -89,7 +91,7 @@ def consume_rabbitmq():
     connection = pika.BlockingConnection(params)
     channel = connection.channel()
 
-    # Declare queue with the correct TTL (matches existing queue)
+    # Declare queue with TTL to match existing queue
     channel.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
     def callback(ch, method, properties, body):
