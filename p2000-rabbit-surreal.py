@@ -3,17 +3,15 @@ import asyncio
 import json
 import re
 from datetime import datetime, timezone
-
 import pika
 from surrealdb import Surreal
 
 # -------------------------------
 # SurrealDB settings
 # -------------------------------
-SURREALDB_URL = "ws://127.0.0.1:8000/rpc"  # WebSocket endpoint
+SURREALDB_URL = "ws://127.0.0.1:8000/rpc"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
-
 DB_NS = "p2000"
 DB_NAME = "p2000"
 TABLE = "messages"
@@ -35,14 +33,13 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # SurrealDB helpers
 # -------------------------------
 async def connect_surreal():
-    """Connect to SurrealDB WebSocket server."""
     db = Surreal(SURREALDB_URL)
     await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
     await db.use(namespace=DB_NS, database=DB_NAME)
     return db
 
 async def insert_message(db, msg):
-    """Insert a single message with deduplication and parsing."""
+    """Insert a message into SurrealDB with deduplication."""
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
     # Parse prio and grip if missing
@@ -54,15 +51,12 @@ async def insert_message(db, msg):
         msg["grip"] = int(m.group(1)) if m else None
 
     # Deduplicate by raw
-    try:
-        check = await db.query(f'SELECT * FROM {TABLE} WHERE raw = $raw', {"raw": msg["raw"]})
-        if check[0]["result"]:
-            print("Duplicate skipped:", msg["raw"])
-            return
-    except Exception as e:
-        print("Deduplication check failed:", e)
+    check = await db.query(f'SELECT * FROM {TABLE} WHERE raw = $raw', {"raw": msg["raw"]})
+    if check[0]["result"]:
+        print("Duplicate skipped:", msg["raw"])
+        return
 
-    # Insert document
+    # Insert
     doc = {
         "raw": msg["raw"],
         "time": msg["time"],
@@ -71,30 +65,26 @@ async def insert_message(db, msg):
         "capcode": msg.get("capcode", []),
         "received_at": msg["received_at"]
     }
-
-    try:
-        await db.insert(TABLE, doc)
-    except Exception as e:
-        print("Insert error:", e)
+    await db.insert(TABLE, doc)
 
 # -------------------------------
 # RabbitMQ consumer
 # -------------------------------
-def start_rabbit_consumer(db):
+def start_rabbitmq_loop(loop, db):
     params = pika.URLParameters(RABBITMQ_URL)
     con = pika.BlockingConnection(params)
     ch = con.channel()
-    ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={"x-message-ttl": QUEUE_TTL})
+    ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
-    def callback(ch, method, properties, body):
+    def cb(ch, method, props, body):
         try:
             msg = json.loads(body)
-            asyncio.run(insert_message(db, msg))
+            asyncio.run_coroutine_threadsafe(insert_message(db, msg), loop)
         except Exception as e:
             print("Parse/insert error:", e, body)
         ch.basic_ack(method.delivery_tag)
 
-    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
+    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
     print("Waiting for messages…")
     ch.start_consuming()
 
@@ -103,7 +93,14 @@ def start_rabbit_consumer(db):
 # -------------------------------
 async def main():
     db = await connect_surreal()
-    start_rabbit_consumer(db)
+    loop = asyncio.get_event_loop()
+    # Start RabbitMQ consumer in a separate thread
+    import threading
+    t = threading.Thread(target=start_rabbitmq_loop, args=(loop, db), daemon=True)
+    t.start()
+    # Keep the async loop running
+    while True:
+        await asyncio.sleep(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
