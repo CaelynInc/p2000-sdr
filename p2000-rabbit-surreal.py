@@ -4,8 +4,8 @@ import json
 import re
 from datetime import datetime, timezone
 
-import aio_pika  # Async RabbitMQ client
-from surrealdb import Surreal
+import aio_pika
+from surrealdb import SurrealAsync  # <-- async client
 
 # -------------------------------
 # SurrealDB settings
@@ -35,9 +35,8 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # SurrealDB connection
 # -------------------------------
 async def connect_surreal():
-    """Connect to SurrealDB v2 async HTTP server."""
-    db = Surreal(SURREALDB_URL)      # <- just the URL
-    await db.connect()                # Connect to server
+    db = SurrealAsync(SURREALDB_URL)
+    await db.connect()  # Connect to server
     await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
     await db.use(namespace=DB_NS, database=DB_NAME)
     return db
@@ -48,7 +47,6 @@ async def connect_surreal():
 async def insert_message(db, msg):
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
-    # Parse prio and grip if missing
     if not msg.get("prio") and msg.get("message"):
         m = PRIO_RE.search(msg["message"])
         msg["prio"] = m.group(1).upper().replace(" ", "") if m else None
@@ -59,7 +57,7 @@ async def insert_message(db, msg):
     # Deduplicate by raw
     try:
         res = await db.select(TABLE, where={"raw": msg["raw"]})
-        if res:  # Duplicate exists
+        if res:
             print("Duplicate skipped:", msg["raw"])
             return
     except Exception:
