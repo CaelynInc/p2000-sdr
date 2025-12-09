@@ -3,11 +3,13 @@ import subprocess
 import pika
 import sys
 import time
+import json
+import re
 
 # -----------------------------
 # RabbitMQ connection settings
 # -----------------------------
-RABBITMQ_HOST = "vps.caelyn.nl"      # e.g. "localhost" or "192.168.1.5"
+RABBITMQ_HOST = "vps.caelyn.nl"
 RABBITMQ_USER = "p2000"
 RABBITMQ_PASS = "Pi2000"
 RABBITMQ_QUEUE = "p2000"
@@ -19,9 +21,6 @@ FREQUENCY = "169.65M"
 
 
 def start_pipeline():
-    """
-    Starts rtl_fm → multimon-ng and returns a pipe that outputs decoded FLEX lines.
-    """
     rtl_cmd = [
         "rtl_fm",
         "-f", FREQUENCY,
@@ -30,7 +29,6 @@ def start_pipeline():
         "-g", "42"
     ]
 
-    # Add -q for quiet mode to suppress startup messages
     multi_cmd = [
         "multimon-ng",
         "-a", "FLEX",
@@ -39,14 +37,12 @@ def start_pipeline():
         "-"
     ]
 
-    # rtl_fm process
     rtl_proc = subprocess.Popen(
         rtl_cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL
     )
 
-    # multimon-ng process (reads from rtl_fm)
     multi_proc = subprocess.Popen(
         multi_cmd,
         stdin=rtl_proc.stdout,
@@ -59,9 +55,6 @@ def start_pipeline():
 
 
 def connect_rabbit():
-    """
-    Keeps trying to connect to RabbitMQ until successful.
-    """
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
 
     while True:
@@ -72,21 +65,55 @@ def connect_rabbit():
                     credentials=credentials
                 )
             )
-
             channel = connection.channel()
-            # Match the existing queue TTL to avoid PRECONDITION_FAILED
             channel.queue_declare(
                 queue=RABBITMQ_QUEUE,
                 durable=True,
-                arguments={'x-message-ttl': 300000}  # 5 minutes in ms
+                arguments={'x-message-ttl': 300000}  # 5 minutes
             )
-
             print("[+] Connected to RabbitMQ")
             return connection, channel
-
         except Exception as e:
             print(f"[-] RabbitMQ unavailable ({e}), retrying...")
             time.sleep(5)
+
+
+def parse_p2000_line(line):
+    parts = line.split('|')
+    
+    if len(parts) < 7:
+        return {
+            "raw": line,
+            "time": None,
+            "message": line,
+            "prio": None,
+            "grip": None,
+            "capcode": []
+        }
+
+    # Message body: fields 5+
+    message_text = '|'.join(parts[5:]).strip()
+
+    # Capcodes: field 4, split by space
+    capcode_field = parts[4].strip()
+    capcodes = capcode_field.split() if capcode_field else []
+
+    # Parse priority
+    prio_match = re.search(r'\b(A[1-2]|B1|P[1-3]|PRIO\s?[1-5])\b', message_text, re.IGNORECASE)
+    prio = prio_match.group(0) if prio_match else None
+
+    # Parse GRIP
+    grip_match = re.search(r'\bGRIP\s?([1-4])\b', message_text, re.IGNORECASE)
+    grip = f"GRIP {grip_match.group(1)}" if grip_match else None
+
+    return {
+        "raw": line,
+        "time": parts[1],
+        "message": message_text,
+        "prio": prio,
+        "grip": grip,
+        "capcode": capcodes
+    }
 
 
 def main():
@@ -97,21 +124,18 @@ def main():
 
     for line in decoder.stdout:
         line = line.strip()
-        if not line:
+        if not line or line.startswith("Enabled demodulators:"):
             continue
 
-        # Suppress multimon-ng startup message
-        if line.startswith("Enabled demodulators:"):
-            continue
+        msg_data = parse_p2000_line(line)
+        msg_json = json.dumps(msg_data)
 
-        # Example FLEX line:
-        # FLEX: Address:123456 Function:1 Alpha:TEST MESSAGE HERE
-        print("[RX]", line)
+        print("[RX]", msg_json)
 
         channel.basic_publish(
             exchange='',
             routing_key=RABBITMQ_QUEUE,
-            body=line.encode("utf8")
+            body=msg_json.encode("utf8")
         )
 
 
