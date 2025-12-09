@@ -7,11 +7,12 @@ import requests
 from datetime import datetime
 
 # SurrealDB settings
-SURREALDB_URL = "http://0.0.0.0:8000"  # Bind to all interfaces
+SURREALDB_URL = "http://0.0.0.0:8000"  # external access
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
 DB_NAME = "p2000"
 TABLE_NAME = "messages"
+DB_PATH = "./p2000-db"  # directory for on-disk storage
 
 # RabbitMQ settings
 RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
@@ -29,11 +30,11 @@ def is_surrealdb_running():
 def start_surrealdb():
     print("Starting SurrealDB...")
     subprocess.Popen([
-        "surreal", "start", "p2000.db",
-        "--bind", "0.0.0.0:8000",  # external access
+        "surreal", "start",
         "--user", SURREALDB_USER,
         "--pass", SURREALDB_PASS,
-        "--log", "stdout"
+        "--bind", "0.0.0.0:8000",
+        DB_PATH  # directory for on-disk database
     ])
     for _ in range(10):
         if is_surrealdb_running():
