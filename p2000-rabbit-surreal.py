@@ -10,7 +10,7 @@ from surrealdb import Surreal
 # -------------------------------
 # SurrealDB settings
 # -------------------------------
-SURREALDB_URL = "http://127.0.0.1:8000"  # SurrealDB HTTP endpoint
+SURREALDB_URL = "http://0.0.0.0:8000/sql"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
 DB_NS = "p2000"
@@ -34,13 +34,14 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # SurrealDB helpers
 # -------------------------------
 async def connect_surreal():
-    db = Surreal(SURREALDB_URL)
-    await db.connect()
-    await db.signin({"user": SURREALDB_USER, "pass": SURREALDB_PASS})
+    """Connect to SurrealDB v2 HTTP and select namespace/database."""
+    db = Surreal(SURREALDB_URL, auth=(SURREALDB_USER, SURREALDB_PASS))
     await db.use(namespace=DB_NS, database=DB_NAME)
     return db
 
+
 async def insert_message(db, msg):
+    """Insert a message into SurrealDB with deduplication, prio/grip parsing."""
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
     # Parse prio and grip if missing
@@ -52,15 +53,12 @@ async def insert_message(db, msg):
         msg["grip"] = int(m.group(1)) if m else None
 
     # Deduplicate by raw
-    try:
-        existing = await db.query(f'SELECT * FROM {TABLE} WHERE raw = $raw', {"raw": msg["raw"]})
-        if existing and len(existing[0]["result"]) > 0:
-            print("Duplicate skipped:", msg["raw"])
-            return
-    except Exception as e:
-        print("Deduplication check failed:", e)
+    check = await db.select(TABLE, where={"raw": msg["raw"]})
+    if check:
+        print("Duplicate skipped:", msg["raw"])
+        return
 
-    # Build object for insertion
+    # Build document
     doc = {
         "raw": msg["raw"],
         "time": msg["time"],
@@ -74,36 +72,38 @@ async def insert_message(db, msg):
     try:
         await db.insert(TABLE, doc)
     except Exception as e:
-        print("Insert failed:", e, doc)
+        print("Insert error:", e, doc)
 
 # -------------------------------
-# RabbitMQ consumer
+# RabbitMQ consumer (blocking)
 # -------------------------------
-def start_consumer(loop):
+def start_consumer(loop, db):
+    """Start RabbitMQ consumer in a thread-safe way."""
     params = pika.URLParameters(RABBITMQ_URL)
     con = pika.BlockingConnection(params)
     ch = con.channel()
     ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
-    async def handle_message(body):
-        msg = json.loads(body)
-        await insert_message(loop.db, msg)
-
-    def cb(ch, method, props, body):
+    def callback(ch, method, props, body):
         try:
-            loop.run_until_complete(handle_message(body))
+            msg = json.loads(body)
+            # Schedule insertion in the asyncio loop
+            asyncio.run_coroutine_threadsafe(insert_message(db, msg), loop)
         except Exception as e:
             print("Parse/insert error:", e, body)
         ch.basic_ack(method.delivery_tag)
 
-    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
+    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
     print("Waiting for messages…")
     ch.start_consuming()
 
 # -------------------------------
 # Main
 # -------------------------------
-if __name__ == "__main__":
+async def main():
+    db = await connect_surreal()
     loop = asyncio.get_event_loop()
-    loop.db = loop.run_until_complete(connect_surreal())
-    start_consumer(loop)
+    start_consumer(loop, db)
+
+if __name__ == "__main__":
+    asyncio.run(main())
