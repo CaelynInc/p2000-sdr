@@ -11,7 +11,7 @@ from surrealdb import Surreal
 # -------------------------------
 # SurrealDB settings
 # -------------------------------
-SURREALDB_URL = "http://0.0.0.0:8000/sql"
+SURREALDB_URL = "http://127.0.0.1:8000/sql"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
 
