@@ -1,158 +1,178 @@
 #!/usr/bin/env python3
-import subprocess
-import time
-import json
-import pika
-import requests
+import pika, json, subprocess, time, requests, os, signal
 from datetime import datetime, timezone
-import re
 
-# -------------------------------
-# SurrealDB settings
-# -------------------------------
-SURREALDB_URL = "http://127.0.0.1:8000/sql"
+SURREALDB_PATH = "/usr/local/bin/surreal"
+SURREALDB_DIR  = "./p2000-db"
+
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
 
-DB_NS = "p2000"
-DB_NAME = "p2000"
-TABLE = "messages"
+RABBITMQ_HOST = "localhost"
+RABBITMQ_QUEUE = "p2000_messages"
 
-HEADERS = {"Content-Type": "text/plain"}
 
-# -------------------------------
-# RabbitMQ settings
-# -------------------------------
-RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
-QUEUE_NAME = "p2000"
-QUEUE_TTL = 300000  # 5 minutes in ms
-
-# -------------------------------
-# FLEX / P2000 parsing
-# -------------------------------
-PRIO_RE = re.compile(r"\b([AB]?1|[AB]?2|[AB]?3|PRIO ?[1235]|P ?[1235])\b", re.IGNORECASE)
-GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
-
-def parse_message(raw):
-    fields = raw.split("|")
-    if len(fields) < 6:
-        return None
-
-    return {
-        "raw": raw,
-        "time": fields[1],
-        "message": fields[5],
-        "prio": (m.group(1).upper().replace(" ", "") if (m := PRIO_RE.search(fields[5])) else None),
-        "grip": (int(m.group(1)) if (m := GRIP_RE.search(fields[5])) else None),
-        "capcode": fields[4].split()
-    }
-
-# -------------------------------
-# SurrealDB helpers
-# -------------------------------
-def is_surrealdb_running():
-    try:
-        r = requests.get(SURREALDB_URL, auth=(SURREALDB_USER, SURREALDB_PASS))
-        return r.status_code in (200, 400)
-    except:
-        return False
-
+# -------------------------
+# Start SurrealDB locally
+# -------------------------
 def start_surrealdb():
-    print("Starting SurrealDB...")
-    subprocess.Popen([
-        "surreal", "start", "rocksdb:p2000.db",
-        "--bind", "0.0.0.0:8000",
-        "--user", SURREALDB_USER,
-        "--pass", SURREALDB_PASS,
-        "--log", "stdout"
-    ])
-    for _ in range(10):
-        if is_surrealdb_running():
-            print("SurrealDB is running.")
-            return
-        time.sleep(1)
-    raise RuntimeError("Failed to start SurrealDB")
+    if not os.path.exists(SURREALDB_DIR):
+        os.makedirs(SURREALDB_DIR)
 
+    print("Starting SurrealDB...")
+    return subprocess.Popen(
+        [
+            SURREALDB_PATH, "start",
+            "--log", "debug",
+            "--user", SURREALDB_USER,
+            "--pass", SURREALDB_PASS,
+            SURREALDB_DIR
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True
+    )
+
+
+# -------------------------
+# JSON-RPC client for SurrealDB
+# -------------------------
 def surreal(query):
-    """Always send exactly one query, no semicolon."""
+    payload = {
+        "id": "1",
+        "method": "query",
+        "params": [query]
+    }
     return requests.post(
-        SURREALDB_URL,
-        headers=HEADERS,
-        data=query,
+        "http://127.0.0.1:8000/rpc",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(payload),
         auth=(SURREALDB_USER, SURREALDB_PASS)
     )
 
+
+# -------------------------
+# Prepare DB (namespace, DB, table, indexes)
+# -------------------------
 def setup_db():
-    cmds = [
-        f"DEFINE NAMESPACE {DB_NS}",
-        f"DEFINE DATABASE {DB_NAME}",
-        f"USE NS {DB_NS}",
-        f"USE DB {DB_NAME}",
+    query = """
+        DEFINE NAMESPACE p2000;
+        DEFINE DATABASE p2000;
 
-        f"DEFINE TABLE {TABLE} SCHEMALESS",
+        USE NS p2000;
+        USE DB p2000;
 
-        f"DEFINE INDEX idx_raw ON TABLE {TABLE} COLUMNS raw UNIQUE",
-        f"DEFINE INDEX idx_time ON TABLE {TABLE} COLUMNS time",
-        f"DEFINE INDEX idx_prio ON TABLE {TABLE} COLUMNS prio",
-        f"DEFINE INDEX idx_capcode ON TABLE {TABLE} COLUMNS capcode",
-    ]
+        DEFINE TABLE messages SCHEMALESS;
 
-    for c in cmds:
-        r = surreal(c)
-        if r.status_code >= 400:
-            print("DB error:", c, r.text)
+        DEFINE INDEX idx_raw ON TABLE messages COLUMNS raw UNIQUE;
+        DEFINE INDEX idx_time ON TABLE messages COLUMNS time;
+        DEFINE INDEX idx_prio ON TABLE messages COLUMNS prio;
+        DEFINE INDEX idx_capcode ON TABLE messages COLUMNS capcode;
+        DEFINE INDEX idx_grip ON TABLE messages COLUMNS grip;
+    """
 
-# -------------------------------
-# Insert messages
-# -------------------------------
+    r = surreal(query)
+    try:
+        resp = r.json()
+        if "error" in resp:
+            print("DB error:", json.dumps(resp, indent=2))
+        else:
+            print("Database setup complete.")
+    except:
+        print("DB unexpected:", r.text)
+
+
+# -------------------------
+# Insert message into SurrealDB
+# -------------------------
 def insert_message(msg):
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
-    # Dedup—raw is UNIQUE so this is cheap
-    check = surreal(f'USE NS {DB_NS}; USE DB {DB_NAME}; SELECT * FROM {TABLE} WHERE raw = "{msg["raw"]}"')
-    try:
-        if check.json()[0]["result"]:
-            print("Duplicate skipped:", msg["raw"])
-            return
-    except:
-        pass
-
     doc = json.dumps(msg)
 
-    q = f"USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {doc}"
-    r = surreal(q)
-    if r.status_code >= 400:
+    query = f"""
+        USE NS p2000;
+        USE DB p2000;
+        INSERT INTO messages {doc};
+    """
+
+    r = surreal(query)
+
+    try:
+        resp = r.json()
+        if "error" in resp:
+            print("Insert error:", json.dumps(resp, indent=2))
+    except:
         print("Insert error:", r.text)
 
-# -------------------------------
+
+# -------------------------
+# Parse P2000 message
+# -------------------------
+def parse_p2000(raw):
+    parts = raw.split("|")
+    msg = {
+        "raw": raw,
+        "prio": None,
+        "capcode": None,
+        "grip": None,
+        "text": None,
+        "time": None
+    }
+
+    if len(parts) >= 4:
+        try:
+            msg["time"] = parts[1]
+            msg["capcode"] = parts[2].split("/")[0]
+            msg["prio"] = parts[2].split("/")[3]
+            msg["grip"] = parts[3]
+        except:
+            pass
+
+    if len(parts) >= 5:
+        msg["text"] = parts[4]
+
+    return msg
+
+
+# -------------------------
 # RabbitMQ consumer
-# -------------------------------
-def consume():
-    params = pika.URLParameters(RABBITMQ_URL)
-    con = pika.BlockingConnection(params)
-    ch = con.channel()
+# -------------------------
+def consume_rabbitmq():
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host=RABBITMQ_HOST)
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue=RABBITMQ_QUEUE)
 
-    ch.queue_declare(queue=QUEUE_NAME, durable=True,
-                     arguments={'x-message-ttl': QUEUE_TTL})
+    print("Waiting for messages… To exit press CTRL+C")
 
-    def cb(ch, method, props, body):
-        raw = body.decode()
-        msg = parse_message(raw)
-        if msg:
-            insert_message(msg)
-        else:
-            print("Parse error:", raw)
-        ch.basic_ack(method.delivery_tag)
+    def callback(ch, method, properties, body):
+        raw = body.decode("utf-8").strip()
+        msg = parse_p2000(raw)
+        insert_message(msg)
 
-    ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
-    print("Waiting for messages…")
-    ch.start_consuming()
+    channel.basic_consume(
+        queue=RABBITMQ_QUEUE,
+        on_message_callback=callback,
+        auto_ack=True
+    )
 
-# -------------------------------
-# Main
-# -------------------------------
+    channel.start_consuming()
+
+
+# -------------------------
+# MAIN
+# -------------------------
 if __name__ == "__main__":
-    if not is_surrealdb_running():
-        start_surrealdb()
+    proc = start_surrealdb()
+    time.sleep(2)
+
     setup_db()
-    consume()
+
+    try:
+        consume_rabbitmq()
+    except KeyboardInterrupt:
+        print("Stopping…")
+        proc.send_signal(signal.SIGINT)
+        proc.wait()
