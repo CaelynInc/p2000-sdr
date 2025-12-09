@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-
 import subprocess
 import pika
 import sys
 import time
 
-RABBITMQ_HOST = "vps.caelyn.nl"
+# -----------------------------
+# RabbitMQ connection settings
+# -----------------------------
+RABBITMQ_HOST = "vps.caelyn.nl"      # e.g. "localhost" or "192.168.1.5"
+RABBITMQ_USER = "p2000"
+RABBITMQ_PASS = "Pi2000"
 RABBITMQ_QUEUE = "p2000"
+
+# -----------------------------
+# RTL-SDR / multimon-ng settings
+# -----------------------------
 FREQUENCY = "169.65M"
+
 
 def start_pipeline():
     """
-    Starts rtl_fm → multimon-ng and returns a pipe that outputs decoded lines.
+    Starts rtl_fm → multimon-ng and returns a pipe that outputs decoded FLEX lines.
     """
     rtl_cmd = [
         "rtl_fm",
@@ -28,12 +37,14 @@ def start_pipeline():
         "-"
     ]
 
+    # rtl_fm process
     rtl_proc = subprocess.Popen(
         rtl_cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL
     )
 
+    # multimon-ng process (reads from rtl_fm)
     multi_proc = subprocess.Popen(
         multi_cmd,
         stdin=rtl_proc.stdout,
@@ -46,15 +57,28 @@ def start_pipeline():
 
 
 def connect_rabbit():
+    """
+    Keeps trying to connect to RabbitMQ until successful.
+    """
+    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+
     while True:
         try:
-            connection = pika.BlockingConnection(pika.ConnectionParameters(RABBITMQ_HOST))
+            connection = pika.BlockingConnection(
+                pika.ConnectionParameters(
+                    host=RABBITMQ_HOST,
+                    credentials=credentials
+                )
+            )
+
             channel = connection.channel()
             channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+
             print("[+] Connected to RabbitMQ")
             return connection, channel
-        except:
-            print("[-] RabbitMQ unavailable, retrying...")
+
+        except Exception as e:
+            print(f"[-] RabbitMQ unavailable ({e}), retrying...")
             time.sleep(5)
 
 
@@ -69,7 +93,8 @@ def main():
         if not line:
             continue
 
-        # Example FLEX output: "FLEX: Address:123456 Function:1 Alpha:TEST MESSAGE"
+        # Example FLEX line:
+        # FLEX: Address:123456 Function:1 Alpha:TEST MESSAGE HERE
         print("[RX]", line)
 
         channel.basic_publish(
