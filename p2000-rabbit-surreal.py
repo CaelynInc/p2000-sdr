@@ -5,6 +5,7 @@ import json
 import pika
 import requests
 from datetime import datetime, timezone
+import re
 
 # -------------------------------
 # SurrealDB settings
@@ -25,6 +26,12 @@ HEADERS = {"Content-Type": "application/json"}
 RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
 QUEUE_NAME = "p2000"
 QUEUE_TTL = 300000  # 5 minutes in ms
+
+# -------------------------------
+# FLEX / P2000 parsing
+# -------------------------------
+PRIO_RE = re.compile(r"\b([AB]?1|[AB]?2|[AB]?3|PRIO ?[1235]|P ?[1235])\b", re.IGNORECASE)
+GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 
 # -------------------------------
 # SurrealDB helpers
@@ -53,7 +60,7 @@ def start_surrealdb():
     raise RuntimeError("Failed to start SurrealDB")
 
 def surreal(query):
-    """Send a query string to SurrealDB via JSON POST."""
+    """Send a SQL query string to SurrealDB via JSON POST."""
     payload = json.dumps({"query": query})
     return requests.post(
         SURREALDB_URL,
@@ -62,24 +69,8 @@ def surreal(query):
         auth=(SURREALDB_USER, SURREALDB_PASS)
     )
 
-def dict_to_surreal(d):
-    """Convert Python dict to SurrealDB object literal for INSERT."""
-    parts = []
-    for k, v in d.items():
-        if isinstance(v, str):
-            v = v.replace('"', '\\"')  # escape quotes
-            parts.append(f'{k}: "{v}"')
-        elif isinstance(v, list):
-            list_val = "[" + ", ".join(f'"{x}"' if isinstance(x, str) else str(x) for x in v) + "]"
-            parts.append(f'{k}: {list_val}')
-        elif v is None:
-            parts.append(f'{k}: NONE')
-        else:
-            parts.append(f'{k}: {v}')
-    return "{" + ", ".join(parts) + "}"
-
 def setup_db():
-    # Define namespace, database, table, indexes
+    """Create namespace, database, table, and indexes if they don't exist."""
     cmds = [
         f"DEFINE NAMESPACE {DB_NS}",
         f"DEFINE DATABASE {DB_NAME}",
@@ -97,12 +88,20 @@ def setup_db():
             print("DB error:", c, r.text)
 
 # -------------------------------
-# Insert messages
+# Insert message
 # -------------------------------
 def insert_message(msg):
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
-    # Deduplication via raw
+    # Parse prio and grip if missing
+    if not msg.get("prio") and msg.get("message"):
+        m = PRIO_RE.search(msg["message"])
+        msg["prio"] = m.group(1).upper().replace(" ", "") if m else None
+    if not msg.get("grip") and msg.get("message"):
+        m = GRIP_RE.search(msg["message"])
+        msg["grip"] = int(m.group(1)) if m else None
+
+    # Deduplicate by raw
     check = surreal(f'USE NS {DB_NS}; USE DB {DB_NAME}; SELECT * FROM {TABLE} WHERE raw = "{msg["raw"]}"')
     try:
         if check.json()[0]["result"]:
@@ -111,8 +110,17 @@ def insert_message(msg):
     except:
         pass
 
-    doc_str = dict_to_surreal(msg)
-    q = f'USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {doc_str}'
+    # Build SurrealDB object literal
+    capcodes = ",".join(msg.get("capcode", []))
+    grip_val = msg["grip"] if msg.get("grip") is not None else "NONE"
+    prio_val = f'"{msg["prio"]}"' if msg.get("prio") else "NONE"
+    doc = (
+        f'{{raw: "{msg["raw"]}", time: "{msg["time"]}", '
+        f'prio: {prio_val}, grip: {grip_val}, '
+        f'capcode: ["{capcodes}"], received_at: "{msg["received_at"]}"}}'
+    )
+
+    q = f'USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {doc}'
     r = surreal(q)
     if r.status_code >= 400:
         print("Insert error:", r.text)
@@ -128,7 +136,7 @@ def consume():
 
     def cb(ch, method, props, body):
         try:
-            msg = json.loads(body)
+            msg = json.loads(body)  # Already JSON from your current producer
             insert_message(msg)
         except Exception as e:
             print("Parse/insert error:", e, body)
