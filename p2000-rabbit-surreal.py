@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
-import subprocess
-import time
 import json
-import pika
-import requests
-from datetime import datetime, timezone
 import re
+import asyncio
+from datetime import datetime, timezone
+import pika
+from surrealdb import Surreal
 
 # -------------------------------
-# SurrealDB settings (v2)
+# SurrealDB settings
 # -------------------------------
-SURREALDB_URL = "http://0.0.0.0:8000/sql"
+SURREALDB_URL = "http://127.0.0.1:8000"
 SURREALDB_USER = "p2000"
 SURREALDB_PASS = "Pi2000"
-
 DB_NS = "p2000"
 DB_NAME = "p2000"
 TABLE = "messages"
-
-HEADERS = {"Content-Type": "application/json"}
 
 # -------------------------------
 # RabbitMQ settings
@@ -36,61 +32,23 @@ GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
 # -------------------------------
 # SurrealDB helpers
 # -------------------------------
-def is_surrealdb_running():
+async def setup_db(db: Surreal):
+    """Setup namespace, database, table, indexes"""
     try:
-        r = requests.get(SURREALDB_URL, auth=(SURREALDB_USER, SURREALDB_PASS))
-        return r.status_code in (200, 400)
-    except:
-        return False
+        await db.query(f"DEFINE NAMESPACE {DB_NS};")
+        await db.query(f"DEFINE DATABASE {DB_NAME};")
+        await db.use(DB_NS, DB_NAME)
+        await db.query(f"DEFINE TABLE {TABLE} SCHEMALESS;")
+        await db.query(f"DEFINE INDEX idx_raw ON {TABLE} COLUMNS raw UNIQUE;")
+        await db.query(f"DEFINE INDEX idx_time ON {TABLE} COLUMNS time;")
+        await db.query(f"DEFINE INDEX idx_prio ON {TABLE} COLUMNS prio;")
+        await db.query(f"DEFINE INDEX idx_capcode ON {TABLE} COLUMNS capcode;")
+        print("Database setup completed.")
+    except Exception as e:
+        print("DB setup warning:", e)
 
-def start_surrealdb():
-    print("Starting SurrealDB...")
-    subprocess.Popen([
-        "surreal", "start", "rocksdb:pi2000-surreal.db",
-        "--bind", "0.0.0.0:8000",
-        "--user", SURREALDB_USER,
-        "--pass", SURREALDB_PASS,
-        "--log", "stdout"
-    ])
-    for _ in range(10):
-        if is_surrealdb_running():
-            print("SurrealDB is running.")
-            return
-        time.sleep(1)
-    raise RuntimeError("Failed to start SurrealDB")
-
-def surreal(query):
-    """Send SurrealQL as JSON (required for v2)."""
-    body = {"query": query}
-    return requests.post(
-        SURREALDB_URL,
-        headers=HEADERS,
-        json=body,
-        auth=(SURREALDB_USER, SURREALDB_PASS)
-    )
-
-def setup_db():
-    """Create namespace, database, table, and indexes if needed."""
-    cmds = [
-        f"DEFINE NAMESPACE {DB_NS};",
-        f"DEFINE DATABASE {DB_NAME};",
-        f"USE NS {DB_NS};",
-        f"USE DB {DB_NAME};",
-        f"DEFINE TABLE {TABLE} SCHEMALESS;",
-        f"DEFINE INDEX idx_raw ON TABLE {TABLE} COLUMNS raw UNIQUE;",
-        f"DEFINE INDEX idx_time ON TABLE {TABLE} COLUMNS time;",
-        f"DEFINE INDEX idx_prio ON TABLE {TABLE} COLUMNS prio;",
-        f"DEFINE INDEX idx_capcode ON TABLE {TABLE} COLUMNS capcode;"
-    ]
-    for c in cmds:
-        r = surreal(c)
-        if r.status_code >= 400:
-            print("DB setup warning:", c, r.text)
-
-# -------------------------------
-# Insert message
-# -------------------------------
-def insert_message(msg):
+async def insert_message(db: Surreal, msg: dict):
+    """Insert a message into SurrealDB, with deduplication"""
     msg["received_at"] = datetime.now(timezone.utc).isoformat()
 
     # Parse prio and grip if missing
@@ -102,36 +60,34 @@ def insert_message(msg):
         msg["grip"] = int(m.group(1)) if m else None
 
     # Deduplicate by raw
-    check_q = f'USE NS {DB_NS}; USE DB {DB_NAME}; SELECT * FROM {TABLE} WHERE raw = "{msg["raw"]}";'
     try:
-        resp = surreal(check_q)
-        res = resp.json()[0].get("result", [])
-        if res:
+        res = await db.query(f'SELECT * FROM {TABLE} WHERE raw = "{msg["raw"]}";')
+        if res and res[0]["result"]:
             print("Duplicate skipped:", msg["raw"])
             return
-    except Exception:
-        pass
+    except Exception as e:
+        print("Deduplication check failed:", e)
 
-    # Build SurrealQL object literal
-    capcodes = msg.get("capcode", [])
+    # Ensure capcodes is a list
+    capcodes = msg.get("capcode") or []
     doc = {
         "raw": msg["raw"],
         "time": msg["time"],
         "prio": msg.get("prio"),
         "grip": msg.get("grip"),
         "capcode": capcodes,
-        "received_at": msg["received_at"]
+        "received_at": msg["received_at"],
     }
 
-    q = f'USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {json.dumps(doc)};'
-    r = surreal(q)
-    if r.status_code >= 400:
-        print("Insert error:", r.text)
+    try:
+        await db.insert(TABLE, doc)
+    except Exception as e:
+        print("Insert error:", e, msg)
 
 # -------------------------------
 # RabbitMQ consumer
 # -------------------------------
-def consume():
+def consume(db: Surreal):
     params = pika.URLParameters(RABBITMQ_URL)
     con = pika.BlockingConnection(params)
     ch = con.channel()
@@ -139,8 +95,8 @@ def consume():
 
     def cb(ch, method, props, body):
         try:
-            msg = json.loads(body)  # Already JSON from producer
-            insert_message(msg)
+            msg = json.loads(body)
+            asyncio.run(insert_message(db, msg))
         except Exception as e:
             print("Parse/insert error:", e, body)
         ch.basic_ack(method.delivery_tag)
@@ -152,8 +108,11 @@ def consume():
 # -------------------------------
 # Main
 # -------------------------------
+async def main():
+    db = Surreal(SURREALDB_URL, username=SURREALDB_USER, password=SURREALDB_PASS)
+    await db.connect()
+    await setup_db(db)
+    consume(db)
+
 if __name__ == "__main__":
-    if not is_surrealdb_running():
-        start_surrealdb()
-    setup_db()
-    consume()
+    asyncio.run(main())
