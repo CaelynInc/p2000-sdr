@@ -5,7 +5,6 @@ import json
 import pika
 import requests
 from datetime import datetime, timezone
-import re
 
 # -------------------------------
 # SurrealDB settings
@@ -26,26 +25,6 @@ HEADERS = {"Content-Type": "application/json"}
 RABBITMQ_URL = "amqp://p2000:Pi2000@vps.caelyn.nl:5672/%2F"
 QUEUE_NAME = "p2000"
 QUEUE_TTL = 300000  # 5 minutes in ms
-
-# -------------------------------
-# FLEX / P2000 parsing
-# -------------------------------
-PRIO_RE = re.compile(r"\b([AB]?1|[AB]?2|[AB]?3|PRIO ?[1235]|P ?[1235])\b", re.IGNORECASE)
-GRIP_RE = re.compile(r"\bGRIP ?([1-4])\b", re.IGNORECASE)
-
-def parse_message(raw):
-    fields = raw.split("|")
-    if len(fields) < 6:
-        return None
-
-    return {
-        "raw": raw,
-        "time": fields[1],
-        "message": fields[5],
-        "prio": (m.group(1).upper().replace(" ", "") if (m := PRIO_RE.search(fields[5])) else None),
-        "grip": (int(m.group(1)) if (m := GRIP_RE.search(fields[5])) else None),
-        "capcode": fields[4].split()
-    }
 
 # -------------------------------
 # SurrealDB helpers
@@ -83,27 +62,35 @@ def surreal(query):
         auth=(SURREALDB_USER, SURREALDB_PASS)
     )
 
-def setup_db():
-    # Check if table exists
-    r = surreal(f'USE NS {DB_NS}; USE DB {DB_NAME}; SHOW TABLES;')
-    tables = []
-    try:
-        tables = r.json()[0]["result"]
-    except Exception:
-        pass
+def dict_to_surreal(d):
+    """Convert Python dict to SurrealDB object literal for INSERT."""
+    parts = []
+    for k, v in d.items():
+        if isinstance(v, str):
+            v = v.replace('"', '\\"')  # escape quotes
+            parts.append(f'{k}: "{v}"')
+        elif isinstance(v, list):
+            list_val = "[" + ", ".join(f'"{x}"' if isinstance(x, str) else str(x) for x in v) + "]"
+            parts.append(f'{k}: {list_val}')
+        elif v is None:
+            parts.append(f'{k}: NONE')
+        else:
+            parts.append(f'{k}: {v}')
+    return "{" + ", ".join(parts) + "}"
 
+def setup_db():
+    # Define namespace, database, table, indexes
     cmds = [
-        f"DEFINE NAMESPACE {DB_NS} IF NOT EXISTS",
-        f"DEFINE DATABASE {DB_NAME} IF NOT EXISTS",
+        f"DEFINE NAMESPACE {DB_NS}",
+        f"DEFINE DATABASE {DB_NAME}",
         f"USE NS {DB_NS}",
         f"USE DB {DB_NAME}",
-        f"DEFINE TABLE {TABLE} SCHEMALESS IF NOT EXISTS",
-        f"DEFINE INDEX idx_raw ON TABLE {TABLE} COLUMNS raw UNIQUE IF NOT EXISTS",
-        f"DEFINE INDEX idx_time ON TABLE {TABLE} COLUMNS time IF NOT EXISTS",
-        f"DEFINE INDEX idx_prio ON TABLE {TABLE} COLUMNS prio IF NOT EXISTS",
-        f"DEFINE INDEX idx_capcode ON TABLE {TABLE} COLUMNS capcode IF NOT EXISTS",
+        f"DEFINE TABLE {TABLE} SCHEMALESS",
+        f"DEFINE INDEX idx_raw ON TABLE {TABLE} COLUMNS raw UNIQUE",
+        f"DEFINE INDEX idx_time ON TABLE {TABLE} COLUMNS time",
+        f"DEFINE INDEX idx_prio ON TABLE {TABLE} COLUMNS prio",
+        f"DEFINE INDEX idx_capcode ON TABLE {TABLE} COLUMNS capcode",
     ]
-
     for c in cmds:
         r = surreal(c)
         if r.status_code >= 400:
@@ -124,8 +111,8 @@ def insert_message(msg):
     except:
         pass
 
-    doc = json.dumps(msg)
-    q = f"USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {doc}"
+    doc_str = dict_to_surreal(msg)
+    q = f'USE NS {DB_NS}; USE DB {DB_NAME}; INSERT INTO {TABLE} {doc_str}'
     r = surreal(q)
     if r.status_code >= 400:
         print("Insert error:", r.text)
@@ -137,17 +124,14 @@ def consume():
     params = pika.URLParameters(RABBITMQ_URL)
     con = pika.BlockingConnection(params)
     ch = con.channel()
-
-    ch.queue_declare(queue=QUEUE_NAME, durable=True,
-                     arguments={'x-message-ttl': QUEUE_TTL})
+    ch.queue_declare(queue=QUEUE_NAME, durable=True, arguments={'x-message-ttl': QUEUE_TTL})
 
     def cb(ch, method, props, body):
-        raw = body.decode()
-        msg = parse_message(raw)
-        if msg:
+        try:
+            msg = json.loads(body)
             insert_message(msg)
-        else:
-            print("Parse error:", raw)
+        except Exception as e:
+            print("Parse/insert error:", e, body)
         ch.basic_ack(method.delivery_tag)
 
     ch.basic_consume(queue=QUEUE_NAME, on_message_callback=cb)
