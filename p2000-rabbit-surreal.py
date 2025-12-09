@@ -18,8 +18,6 @@ DB_NS = "p2000"
 DB_NAME = "p2000"
 TABLE = "messages"
 
-HEADERS = {"Content-Type": "text/plain"}  # <-- key change
-
 # -------------------------------
 # RabbitMQ settings
 # -------------------------------
@@ -60,11 +58,11 @@ def start_surrealdb():
     raise RuntimeError("Failed to start SurrealDB")
 
 def surreal(query):
-    """Send SurrealQL as plain text (required for DEFINE/INSERT/INDEX)."""
+    """Send SurrealQL as JSON (required for v1+)."""
     return requests.post(
         SURREALDB_URL,
-        headers=HEADERS,
-        data=query,
+        headers={"Content-Type": "application/json"},
+        json={"query": query},
         auth=(SURREALDB_USER, SURREALDB_PASS)
     )
 
@@ -136,7 +134,7 @@ def consume():
 
     def cb(ch, method, props, body):
         try:
-            msg = json.loads(body)  # Already JSON from your producer
+            msg = json.loads(body)  # Already JSON from producer
             insert_message(msg)
         except Exception as e:
             print("Parse/insert error:", e, body)
