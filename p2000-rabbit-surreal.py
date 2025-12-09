@@ -70,7 +70,7 @@ def is_surrealdb_running():
 def start_surrealdb():
     print("Starting SurrealDB...")
     subprocess.Popen([
-        "surreal", "start", "rocksdb:p2000-surreal.db",
+        "surreal", "start", "rocksdb:p2000.db",
         "--bind", "0.0.0.0:8000",  # allow external access
         "--user", SURREALDB_USER,
         "--pass", SURREALDB_PASS,
@@ -100,14 +100,14 @@ def exec_query(query):
 
 def setup_database():
     queries = [
-        f"CREATE NS `{DB_NS}`;",
-        f"USE NS `{DB_NS}` DB `{DB_NAME}`;",
-        f"DEFINE TABLE `{TABLE_NAME}`;",
-        f"DEFINE INDEX idx_time ON `{TABLE_NAME}` FIELDS time;",
-        f"DEFINE INDEX idx_prio ON `{TABLE_NAME}` FIELDS prio;",
-        f"DEFINE INDEX idx_grip ON `{TABLE_NAME}` FIELDS grip;",
-        f"DEFINE INDEX idx_capcode ON `{TABLE_NAME}` FIELDS capcode;",
-        f"DEFINE INDEX idx_raw ON `{TABLE_NAME}` FIELDS raw;"
+        f"CREATE NS {DB_NS};",
+        f"USE NS {DB_NS} DB {DB_NAME};",
+        f"CREATE TABLE {TABLE_NAME};",
+        f"CREATE INDEX idx_time ON {TABLE_NAME} COLUMNS time;",
+        f"CREATE INDEX idx_prio ON {TABLE_NAME} COLUMNS prio;",
+        f"CREATE INDEX idx_grip ON {TABLE_NAME} COLUMNS grip;",
+        f"CREATE INDEX idx_capcode ON {TABLE_NAME} COLUMNS capcode;",
+        f"CREATE INDEX idx_raw ON {TABLE_NAME} COLUMNS raw;"
     ]
     for q in queries:
         exec_query(q)
@@ -118,8 +118,7 @@ def insert_message(msg):
     msg['received_at'] = datetime.now(timezone.utc).isoformat()
 
     # Deduplication check
-    raw_escaped = msg['raw'].replace('"', '\\"')
-    check_query = f"USE NS `{DB_NS}` DB `{DB_NAME}`; SELECT * FROM `{TABLE_NAME}` WHERE raw = \"{raw_escaped}\";"
+    check_query = f"USE NS {DB_NS} DB {DB_NAME}; SELECT * FROM {TABLE_NAME} WHERE raw = {json.dumps(msg['raw'])};"
     resp = exec_query(check_query)
     try:
         if resp and resp.json() and resp.json()[0].get('result'):
@@ -128,10 +127,8 @@ def insert_message(msg):
     except Exception:
         pass
 
-    # Insert - use SurrealDB object syntax
-    received_escaped = msg['received_at'].replace('"', '\\"')
-    time_escaped = msg['time'].replace('"', '\\"')
-    insert_query = f"USE NS `{DB_NS}` DB `{DB_NAME}`; INSERT INTO `{TABLE_NAME}` {{raw: \"{raw_escaped}\", time: \"{time_escaped}\", prio: {json.dumps(msg['prio'])}, grip: {json.dumps(msg['grip'])}, capcode: {json.dumps(msg['capcode'])}, received_at: \"{received_escaped}\"}};"
+    # Insert
+    insert_query = f"USE NS {DB_NS} DB {DB_NAME}; INSERT INTO {TABLE_NAME} CONTENT {json.dumps(msg)};"
     exec_query(insert_query)
 
 # -------------------------------
